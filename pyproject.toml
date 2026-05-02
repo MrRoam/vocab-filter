@@ -1,0 +1,27 @@
+[project]
+name = "vocab-filter"
+version = "0.2.0"
+description = "Rule-based personal English unknown-word filter using CEFR, frequency, and personal known/unknown word lists."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+full = [
+    "spacy>=3.7",
+    "wordfreq>=3.1",
+    "cefrpy>=1.0",
+]
+ui = [
+    "streamlit>=1.31",
+    "pandas>=1.5",
+    "spacy>=3.7",
+    "wordfreq>=3.1",
+    "cefrpy>=1.0",
+]
+
+[project.scripts]
+vocab-filter = "vocab_filter.cli:main"
+
+[tool.setuptools]
+packages = ["vocab_filter"]

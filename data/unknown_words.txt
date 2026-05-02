@@ -1,0 +1,3 @@
+# Put words you have confirmed as unknown here.
+linger
+meticulous
