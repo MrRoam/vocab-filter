@@ -33,4 +33,4 @@ def test_pipeline_outputs_markdown():
         cefr_csv="data/cefr_seed.csv",
     )
     assert any(row["lemma"] == "intricate" for row in result.likely_unknown)
-    assert "# Likely Unknown Words" in result.likely_unknown_md
+    assert "# 建议学习词汇" in result.likely_unknown_md

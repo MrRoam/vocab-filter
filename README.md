@@ -1,68 +1,133 @@
 # vocab-filter
 
-一个**规则主导**的个人英语生词过滤器。
+一个**规则主导**的个人英语词汇过滤器。
 
 目标：
 
-> 输入一篇英文文章，或一批英文单词；  
-> 根据你的英语水平、CEFR 词汇等级、词频、个人已知词库；  
-> 输出你**大概率不认识**的词、边界词、专有名词，并可下载 Markdown。
+> 上传英文文章、Markdown 笔记、CSV 或词表；  
+> 根据考试成绩 / 快速测评 / CEFR 等级确定你的筛词水平；  
+> 结合 CEFR、词频和个人词库，输出更值得优先处理的词汇。
 
-它不是让 AI 猜“你认不认识这个词”。核心判断由规则完成。
-
----
-
-## 第一性原理
-
-人是否认识一个词，不能只靠 AI 猜。一个词是否可能陌生，主要取决于：
-
-1. 词本身的等级：CEFR A1-C2
-2. 真实英语中的常见程度：frequency
-3. 你的个人历史标记：known / unknown
-
-所以本项目第一版只做筛词，不做复杂学习系统。AI 以后只放在后处理：解释上下文、生成例句、生成 Anki 卡片。
+核心判断由规则完成，不让 AI 猜“你认不认识这个词”。
 
 ---
 
-## 推荐安装
+## 安装
+
+推荐安装 UI 版本：
 
 ```bash
 pip install -e ".[ui]"
 python -m spacy download en_core_web_sm
 ```
 
-如果只想跑命令行最小版：
+如果只想运行命令行最小版：
 
 ```bash
 pip install -e .
 ```
 
-说明：
-
-- 安装了 `cefrpy`：优先使用 Maximax67/Words-CEFR-Dataset 进行 A1-C2 查询。
-- 安装了 `wordfreq`：用真实词频。
-- 安装了 `spaCy + en_core_web_sm`：文章分词、词形还原、专有名词识别更准。
-- 没装这些增强依赖：仍然可以用内置 fallback 逻辑运行。
-
 ---
 
-## UI 使用
-
-启动本地网页：
+## 启动 UI
 
 ```bash
 streamlit run app.py
 ```
 
-然后在浏览器里：
+打开浏览器后：
 
-1. 上传 `.txt` / `.md` / `.csv`
-2. 选择你的水平：四级、六级、雅思，或自定义 A1-C2
-3. 选择 CEFR 后端：推荐 `自动：优先 cefrpy，失败则用 CSV`
-4. 点击 `Analyze`
-5. 下载 `likely_unknown.md` 或 CSV
+1. 在左侧选择水平确定方式：考试成绩、快速测评结果，或手动 CEFR。
+2. CEFR 词库多数情况下保持“自动”。
+3. 拖入 `.txt` / `.md` / `.csv`，或直接粘贴文本。
+4. 点击“开始分析”。
+5. 在“导出结果”中选择导出范围和格式。
 
-UI 还包含一个 **5 分钟快速词汇水平测试**，会让你对一组词标记“认识 / 模糊 / 不认识”，然后估计建议筛词等级。
+---
+
+## UI 结果分类
+
+| UI 名称 | 含义 |
+|---|---|
+| 建议学习词汇 | 系统判断更值得优先处理的词 |
+| 待确认词汇 | 接近当前水平，建议人工确认 |
+| 暂不处理词汇 | 基础词、已掌握词或暂不建议投入时间的词 |
+| 专有名词 | 人名、地名、机构名等，不计入普通词汇学习 |
+
+UI 默认只显示必要字段：
+
+```text
+词汇 / 原文形式 / CEFR / 原文句子
+```
+
+更细的内部字段，例如 lemma、POS、Zipf、reason，保留在底层 CSV / 调试逻辑中，不再默认展示在 UI 里。
+
+---
+
+## 水平设置
+
+支持三种方式：
+
+### 1. 考试成绩换算
+
+当前内置近似规则：
+
+| 考试 | 分数段 | 筛词等级 |
+|---|---:|---|
+| 四级 | 425-549 | B1 |
+| 四级 | 550+ | B2 |
+| 六级 | 425-599 | B2 |
+| 六级 | 600+ | C1 |
+| 雅思 | 5.5-6.5 | B2 |
+| 雅思 | 7.0-8.0 | C1 |
+| 托福 iBT | 72-94 | B2 |
+| 托福 iBT | 95-113 | C1 |
+| Duolingo | 110-125 | B2 |
+| Duolingo | 130-145 | C1 |
+
+这些规则只用于筛词阈值，不代表正式语言能力认证。
+
+### 2. 快速测评
+
+提供三种完整度：
+
+```text
+简洁版：约 2 分钟
+标准版：约 5 分钟
+完整版：约 8-10 分钟
+```
+
+测评完成后，UI 会自动把建议 CEFR 等级应用到左侧设置。
+
+### 3. 手动 CEFR
+
+直接选择 A1-C2。
+
+---
+
+## CEFR 词库来源
+
+UI 中提供三种简化选项：
+
+| 选项 | 含义 |
+|---|---|
+| 自动 | 自动选择可用词库 |
+| 内置词库 | 使用项目依赖提供的 A1-C2 词库，不可用时退回备用 CSV |
+| 上传词库 | 使用你上传的 CSV，格式为 `word,level` |
+
+推荐依赖是 `cefrpy`，它封装了 Maximax67/Words-CEFR-Dataset。
+
+自定义 CSV 格式：
+
+```csv
+word,level
+house,A1
+ability,A2
+academic,B1
+abandon,B2
+intricate,C1
+ubiquitous,C1
+```
 
 ---
 
@@ -90,84 +155,6 @@ python -m vocab_filter.cli \
   --out output_words
 ```
 
-输出：
-
-```text
-output/
-├── likely_unknown.csv
-├── likely_unknown.md
-├── borderline.csv
-├── borderline.md
-├── likely_known.csv
-├── proper_nouns.csv
-└── all_tokens.csv
-```
-
----
-
-## CEFR 词库来源
-
-推荐使用：
-
-```text
-cefrpy / Maximax67/Words-CEFR-Dataset
-```
-
-代码里已经封装了 `cefrpy` 后端。如果安装失败，程序会自动回退到本地 CSV。
-
-本地 CSV 格式仍然支持：
-
-```csv
-word,level
-house,A1
-ability,A2
-academic,B1
-abandon,B2
-intricate,C1
-ubiquitous,C1
-```
-
-运行时可以指定：
-
-```bash
-python -m vocab_filter.cli --text examples/article.txt --backend csv --cefr data/your_cefr.csv --level B2
-```
-
----
-
-## 规则
-
-个人词库优先级最高：
-
-```text
-known_words.txt   -> 直接判为 likely_known
-unknown_words.txt -> 直接判为 likely_unknown
-```
-
-然后看 CEFR：
-
-```text
-A1/A2/B1 低于 B2 用户水平 -> 大概率认识
-B2 接近用户水平          -> 边界词
-C1/C2 高于用户水平       -> 大概率不认识
-```
-
-再用词频修正：
-
-```text
-Zipf >= 5.0  降低陌生概率
-Zipf >= 4.0  稍微降低陌生概率
-Zipf < 3.0   提高陌生概率
-```
-
-最终分类：
-
-```text
-score < 40       likely_known
-40 <= score < 65 borderline
-score >= 65      likely_unknown
-```
-
 ---
 
 ## 项目结构
@@ -178,26 +165,19 @@ vocab-filter/
 ├── vocab_filter/
 │   ├── pipeline.py                # UI 和 CLI 复用的分析流程
 │   ├── lexicon.py                 # cefrpy / CSV CEFR 后端
+│   ├── level_mapping.py           # 考试成绩到 CEFR 的映射
 │   ├── export_md.py               # Markdown 导出
-│   ├── placement.py               # 5 分钟水平测试
+│   ├── placement.py               # 词汇水平测评
 │   ├── cli.py                     # 命令行入口
 │   ├── preprocess.py              # 分词、词形还原、专有名词识别
 │   ├── scorer.py                  # 规则评分
 │   └── frequency.py               # wordfreq / fallback 词频
 ├── data/
 │   ├── cefr_seed.csv              # fallback demo CEFR CSV
-│   ├── placement_test_words.csv   # 快速水平测试词
+│   ├── placement_test_words.csv   # 测评词表
 │   ├── known_words.txt
 │   └── unknown_words.txt
 └── examples/
     ├── article.txt
     └── words.txt
 ```
-
----
-
-## 下一步
-
-1. 把测试结果写入本地配置文件，UI 自动记住你的等级。
-2. 支持把 unknown_words 导出到 Anki / 欧路词典格式。
-3. 给 likely_unknown.md 添加 AI 生成的上下文释义和例句。

@@ -1,22 +1,20 @@
 from __future__ import annotations
 
 from datetime import datetime
-from html import escape
 from typing import Iterable
 
 
-def rows_to_markdown(rows: Iterable[dict], title: str = "Likely Unknown Words") -> str:
+def rows_to_markdown(rows: Iterable[dict], title: str = "建议学习词汇") -> str:
     rows = list(rows)
     lines: list[str] = []
     lines.append(f"# {title}")
     lines.append("")
-    lines.append(f"Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    lines.append("")
-    lines.append(f"Total: {len(rows)}")
+    lines.append(f"生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"词数：{len(rows)}")
     lines.append("")
 
     if not rows:
-        lines.append("No words found.")
+        lines.append("未发现符合条件的词汇。")
         lines.append("")
         return "\n".join(lines)
 
@@ -26,14 +24,12 @@ def rows_to_markdown(rows: Iterable[dict], title: str = "Likely Unknown Words") 
         lines.append(f"## {idx}. {word}")
         lines.append("")
         if surface and surface != word:
-            lines.append(f"- Original: `{surface}`")
-        lines.append(f"- CEFR: `{row.get('cefr') or 'unknown'}`")
-        lines.append(f"- Score: `{row.get('score', '')}`")
-        lines.append(f"- Label: `{row.get('label', '')}`")
-        lines.append(f"- Zipf: `{row.get('zipf', '')}`")
-        lines.append(f"- Reason: {row.get('reason', '')}")
+            lines.append(f"- 原文形式：`{surface}`")
+        lines.append(f"- CEFR：`{row.get('cefr') or '未知'}`")
+        if row.get("score") not in (None, ""):
+            lines.append(f"- 系统评分：`{row.get('score')}`")
         sentence = (row.get("sentence") or "").strip()
         if sentence:
-            lines.append(f"- Context: {sentence}")
+            lines.append(f"- 原文句子：{sentence}")
         lines.append("")
     return "\n".join(lines)

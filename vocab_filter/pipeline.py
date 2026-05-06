@@ -118,8 +118,8 @@ def analyze_content(
         likely_known=likely_known,
         proper_nouns=proper_rows,
         summary=summary,
-        likely_unknown_md=rows_to_markdown(likely_unknown, "Likely Unknown Words"),
-        borderline_md=rows_to_markdown(borderline, "Borderline Words"),
+        likely_unknown_md=rows_to_markdown(likely_unknown, "建议学习词汇"),
+        borderline_md=rows_to_markdown(borderline, "待确认词汇"),
     )
 
 
