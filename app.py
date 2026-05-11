@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
-import tempfile
-from pathlib import Path
+import re
 
 import streamlit as st
 
@@ -11,6 +10,7 @@ from vocab_filter.export_md import rows_to_markdown
 from vocab_filter.level_mapping import CEFR_OPTIONS, score_to_cefr
 from vocab_filter.pipeline import analyze_content
 from vocab_filter.placement import estimate_level, sample_test_words
+from vocab_filter.preprocess import should_skip_token, simple_lemma
 
 try:
     import pandas as pd  # type: ignore
@@ -22,6 +22,7 @@ st.set_page_config(
     page_title="Vocab Filter",
     page_icon="📘",
     layout="wide",
+    menu_items={"Get Help": None, "Report a bug": None, "About": None},
 )
 
 
@@ -33,21 +34,1122 @@ RESULT_LABELS = {
     "all": "全部分析结果",
 }
 
-TEST_MODES = {
-    "简洁版（约 2 分钟）": 4,
-    "标准版（约 5 分钟）": 8,
-    "完整版（约 8-10 分钟）": 12,
-}
+PLACEMENT_WORDS_PER_LEVEL = 5
+WORD_RE = re.compile(r"[A-Za-z]+(?:[-'][A-Za-z]+)?")
 
-CEFR_SOURCE_OPTIONS = ["自动", "内置词库", "上传词库"]
+
+def apply_style() -> None:
+    theme = st.session_state.get("theme_mode", "深色")
+    if theme == "浅色":
+        tokens = """
+  --vf-bg: #f8f7f3;
+  --vf-bg-end: #eeece6;
+  --vf-surface: rgba(255, 255, 255, 0.72);
+  --vf-surface-solid: #ffffff;
+  --vf-dialog-bg: #ffffff;
+  --vf-dialog-text: #171717;
+  --vf-dialog-muted: #57534e;
+  --vf-dialog-subtle: #f6f4ef;
+  --vf-surface-soft: rgba(28, 25, 23, 0.045);
+  --vf-panel-2: #f3f1eb;
+  --vf-line: rgba(28, 25, 23, 0.12);
+  --vf-line-strong: rgba(28, 25, 23, 0.18);
+  --vf-text: #171717;
+  --vf-muted: #68635c;
+  --vf-faint: #a8a29e;
+  --vf-accent: #18181b;
+  --vf-accent-contrast: #ffffff;
+  --vf-accent-soft: rgba(24, 24, 27, 0.08);
+  --vf-warm: #2563eb;
+  --vf-success: #15803d;
+  --vf-shadow: 0 24px 48px -24px rgba(28, 25, 23, 0.32);
+  --vf-shadow-soft: 0 1px 2px rgba(28, 25, 23, 0.06);
+  --vf-shell: #ffffff;
+  --vf-shell-text: #171717;
+  --vf-shell-muted: #746f68;
+  --vf-shell-line: rgba(28, 25, 23, 0.12);
+  --vf-shell-ring: rgba(28, 25, 23, 0.10);
+  --vf-shell-button: #18181b;
+  --vf-shell-button-text: #ffffff;
+        """
+        app_background = """
+  background:
+    linear-gradient(112deg, rgba(37, 99, 235, 0.08), transparent 32rem),
+    linear-gradient(180deg, rgba(28, 25, 23, 0.035), transparent 22rem),
+    linear-gradient(180deg, #faf9f6 0%, var(--vf-bg) 46%, var(--vf-bg-end) 100%);
+        """
+    else:
+        tokens = """
+  --vf-bg: #08090b;
+  --vf-bg-end: #111214;
+  --vf-surface: rgba(255, 255, 255, 0.055);
+  --vf-surface-solid: #171719;
+  --vf-dialog-bg: #171719;
+  --vf-dialog-text: #fcfbf8;
+  --vf-dialog-muted: rgba(252, 251, 248, 0.62);
+  --vf-dialog-subtle: rgba(255, 255, 255, 0.055);
+  --vf-surface-soft: rgba(255, 255, 255, 0.07);
+  --vf-panel-2: #202023;
+  --vf-line: rgba(255, 255, 255, 0.09);
+  --vf-line-strong: rgba(255, 255, 255, 0.16);
+  --vf-text: #fcfbf8;
+  --vf-muted: rgba(252, 251, 248, 0.64);
+  --vf-faint: rgba(252, 251, 248, 0.42);
+  --vf-accent: rgba(255, 255, 255, 0.96);
+  --vf-accent-contrast: #111214;
+  --vf-accent-soft: rgba(255, 255, 255, 0.10);
+  --vf-warm: #6aa7ff;
+  --vf-success: #7dd3a7;
+  --vf-shadow: 0 32px 80px -42px rgba(0, 0, 0, 0.92);
+  --vf-shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.34);
+  --vf-shell: #272725;
+  --vf-shell-text: #fcfbf8;
+  --vf-shell-muted: rgba(252, 251, 248, 0.62);
+  --vf-shell-line: rgba(255, 255, 255, 0.08);
+  --vf-shell-ring: rgba(0, 0, 0, 0.42);
+  --vf-shell-button: rgba(255, 255, 255, 0.96);
+  --vf-shell-button-text: #111214;
+        """
+        app_background = """
+  background:
+    linear-gradient(110deg, rgba(37, 99, 235, 0.18), transparent 34rem),
+    linear-gradient(250deg, rgba(252, 251, 248, 0.06), transparent 30rem),
+    linear-gradient(180deg, #121315 0%, var(--vf-bg) 48%, var(--vf-bg-end) 100%);
+        """
+
+    st.markdown(
+        """
+<style>
+:root {
+__TOKENS__
+  --vf-radius-sm: 8px;
+  --vf-radius-md: 12px;
+  --vf-radius-lg: 16px;
+  --vf-radius-xl: 22px;
+  --vf-radius-2xl: 30px;
+}
+.stApp {
+__APP_BACKGROUND__
+  color: var(--vf-text);
+}
+.stApp::before {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(120, 113, 108, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 113, 108, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black, transparent 70%);
+  z-index: 0;
+}
+.block-container {
+  position: relative;
+  z-index: 1;
+  padding-top: 1.05rem;
+  padding-left: 2.8rem;
+  padding-right: 2.8rem;
+  max-width: 1320px;
+}
+[data-testid="stSidebar"] {
+  display: none;
+}
+[data-testid="stCaptionContainer"] {
+  color: var(--vf-muted);
+}
+h1, h2, h3 {
+  letter-spacing: 0;
+  color: var(--vf-text);
+}
+h1 {
+  font-size: 1.3rem;
+  margin-bottom: 0;
+}
+h2, h3 {
+  margin-top: 1.4rem;
+}
+p, li, label, span {
+  color: inherit;
+}
+.stApp [data-testid="stWidgetLabel"],
+.stApp [data-testid="stWidgetLabel"] *,
+.stApp label {
+  color: var(--vf-text) !important;
+  opacity: 1 !important;
+}
+.stApp [data-testid="stCaptionContainer"],
+.stApp [data-testid="stCaptionContainer"] * {
+  color: var(--vf-muted) !important;
+  opacity: 1 !important;
+}
+[data-testid="stDeployButton"],
+[data-testid="stToolbar"],
+#MainMenu,
+footer,
+header {
+  visibility: hidden;
+  height: 0;
+}
+div[data-testid="stMetric"] {
+  background: var(--vf-surface);
+  border: 1px solid var(--vf-line);
+  border-radius: var(--vf-radius-lg);
+  padding: .95rem 1rem;
+  box-shadow: var(--vf-shadow-soft);
+  backdrop-filter: blur(18px);
+}
+div[data-testid="stMetricValue"] {
+  color: var(--vf-text);
+  font-size: 1.85rem;
+  font-weight: 680;
+}
+div[data-testid="stMetricLabel"] {
+  color: var(--vf-muted);
+}
+.stTabs [data-baseweb="tab-list"] {
+  gap: .8rem;
+  border-bottom: 1px solid var(--vf-line);
+}
+.stTabs [data-baseweb="tab"] {
+  border-radius: 999px 999px 0 0;
+  padding-left: .4rem;
+  padding-right: .4rem;
+  color: var(--vf-muted);
+}
+.stTabs [aria-selected="true"] {
+  color: var(--vf-text);
+}
+.stTabs [data-baseweb="tab-highlight"] {
+  background: var(--vf-warm);
+}
+.stButton > button,
+.stDownloadButton > button {
+  border-radius: var(--vf-radius-md);
+  border: 1px solid var(--vf-line);
+  background: var(--vf-surface-solid);
+  color: var(--vf-text);
+  min-height: 42px;
+  font-weight: 620;
+  box-shadow: var(--vf-shadow-soft);
+  transition:
+    transform 180ms ease-out,
+    box-shadow 180ms ease-out,
+    border-color 180ms ease-out,
+    background 180ms ease-out;
+}
+.stButton > button:hover,
+.stDownloadButton > button:hover {
+  border-color: var(--vf-line-strong);
+  background: var(--vf-panel-2);
+  color: var(--vf-text);
+  transform: translateY(-1px);
+  box-shadow: var(--vf-shadow);
+}
+.stButton > button:active,
+.stDownloadButton > button:active {
+  transform: scale(.98);
+}
+.stButton > button[kind="primary"] {
+  background: var(--vf-accent);
+  border-color: var(--vf-accent);
+  color: var(--vf-accent-contrast);
+}
+.stButton > button *,
+.stDownloadButton > button * {
+  color: inherit !important;
+}
+div[data-baseweb="select"] > div,
+div[data-baseweb="input"] > div,
+textarea,
+input {
+  border-color: var(--vf-line) !important;
+  border-radius: var(--vf-radius-md) !important;
+  background-color: var(--vf-surface-solid) !important;
+  color: var(--vf-text) !important;
+}
+div[data-baseweb="input"] > div *,
+textarea::placeholder,
+input::placeholder {
+  color: var(--vf-faint) !important;
+  opacity: 1 !important;
+}
+div[data-baseweb="select"] > div * {
+  color: var(--vf-text) !important;
+  opacity: 1 !important;
+}
+div[data-baseweb="select"] span,
+div[data-baseweb="select"] input,
+div[data-baseweb="input"] input,
+textarea,
+input:not([type="checkbox"]):not([type="radio"]) {
+  color: var(--vf-text) !important;
+  -webkit-text-fill-color: var(--vf-text) !important;
+  opacity: 1 !important;
+}
+div[data-baseweb="select"] svg,
+div[data-baseweb="input"] svg {
+  color: var(--vf-muted) !important;
+  fill: var(--vf-muted) !important;
+}
+textarea:focus,
+input:focus,
+div[data-baseweb="select"] > div:focus-within {
+  border-color: var(--vf-warm) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vf-warm) 18%, transparent) !important;
+}
+[data-testid="stFileUploaderDropzone"] {
+  border: 1px dashed var(--vf-line-strong);
+  border-radius: var(--vf-radius-xl);
+  background: var(--vf-surface);
+}
+[data-testid="stFileUploaderDropzone"] *,
+[data-testid="stFileUploaderDropzone"] small,
+[data-testid="stFileUploaderDropzone"] span,
+[data-testid="stFileUploaderDropzone"] p {
+  color: var(--vf-muted) !important;
+  opacity: 1 !important;
+}
+[data-testid="stFileUploaderDropzone"] button {
+  background: var(--vf-accent) !important;
+  border-color: var(--vf-accent) !important;
+  color: var(--vf-accent-contrast) !important;
+}
+[data-testid="stFileUploaderDropzone"] button * {
+  color: var(--vf-accent-contrast) !important;
+}
+[data-testid="stDataFrame"] {
+  border: 1px solid var(--vf-line);
+  border-radius: var(--vf-radius-xl);
+  overflow: hidden;
+  box-shadow: var(--vf-shadow-soft);
+}
+div[data-baseweb="popover"] > div {
+  border: 1px solid var(--vf-line) !important;
+  border-radius: var(--vf-radius-xl) !important;
+  background: var(--vf-surface-solid) !important;
+  color: var(--vf-text) !important;
+  box-shadow: var(--vf-shadow) !important;
+}
+div[data-testid="stDialog"],
+div[data-testid="stDialog"] div[role="dialog"],
+div[role="dialog"] {
+  color: var(--vf-dialog-text) !important;
+}
+div[data-testid="stDialog"] div[role="dialog"],
+div[role="dialog"] {
+  border: 1px solid rgba(28, 25, 23, 0.14) !important;
+  border-radius: var(--vf-radius-2xl);
+  background: var(--vf-dialog-bg) !important;
+  color: var(--vf-dialog-text) !important;
+  box-shadow: var(--vf-shadow);
+}
+div[data-testid="stDialog"] h1,
+div[data-testid="stDialog"] h2,
+div[data-testid="stDialog"] h3,
+div[data-testid="stDialog"] p,
+div[data-testid="stDialog"] label,
+div[data-testid="stDialog"] span,
+div[data-testid="stDialog"] li,
+div[data-testid="stDialog"] div[data-testid="stMarkdownContainer"],
+div[role="dialog"] h1,
+div[role="dialog"] h2,
+div[role="dialog"] h3,
+div[role="dialog"] p,
+div[role="dialog"] label,
+div[role="dialog"] span,
+div[role="dialog"] li,
+div[role="dialog"] div[data-testid="stMarkdownContainer"] {
+  color: var(--vf-dialog-text) !important;
+}
+html body .stApp div[role="dialog"] p,
+html body .stApp div[role="dialog"] span,
+html body .stApp div[role="dialog"] label,
+html body .stApp div[role="dialog"] li,
+html body .stApp div[role="dialog"] h1,
+html body .stApp div[role="dialog"] h2,
+html body .stApp div[role="dialog"] h3,
+html body .stApp div[role="dialog"] h4,
+html body .stApp div[role="dialog"] div[data-testid="stMarkdownContainer"],
+html body .stApp div[role="dialog"] [data-testid="stWidgetLabel"],
+html body .stApp div[role="dialog"] [data-testid="stMarkdownContainer"] p,
+html body .stApp div[role="dialog"] [data-testid="stMarkdownContainer"] span {
+  color: var(--vf-dialog-text) !important;
+  opacity: 1 !important;
+}
+div[data-testid="stDialog"] [data-testid="stCaptionContainer"],
+div[data-testid="stDialog"] .vf-dialog-heading p,
+div[data-testid="stDialog"] .vf-nav-note,
+div[role="dialog"] [data-testid="stCaptionContainer"],
+div[role="dialog"] .vf-dialog-heading p,
+div[role="dialog"] .vf-nav-note {
+  color: var(--vf-dialog-muted) !important;
+}
+html body .stApp div[role="dialog"] [data-testid="stCaptionContainer"],
+html body .stApp div[role="dialog"] .vf-dialog-heading p,
+html body .stApp div[role="dialog"] .vf-nav-note {
+  color: var(--vf-dialog-muted) !important;
+  opacity: 1 !important;
+}
+div[data-testid="stDialog"] .vf-section-label,
+div[role="dialog"] .vf-section-label {
+  color: #a84e0a !important;
+}
+html body .stApp div[role="dialog"] .vf-section-label {
+  color: #a84e0a !important;
+  opacity: 1 !important;
+}
+html body .stApp div[role="dialog"] .stButton > button,
+html body .stApp div[role="dialog"] .stDownloadButton > button {
+  background: #ffffff !important;
+  border-color: rgba(28, 25, 23, 0.14) !important;
+  color: var(--vf-dialog-text) !important;
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06) !important;
+}
+html body .stApp div[role="dialog"] .stButton > button:hover,
+html body .stApp div[role="dialog"] .stDownloadButton > button:hover {
+  background: var(--vf-dialog-subtle) !important;
+  border-color: rgba(28, 25, 23, 0.24) !important;
+}
+html body .stApp div[role="dialog"] .stButton > button p,
+html body .stApp div[role="dialog"] .stButton > button span,
+html body .stApp div[role="dialog"] .stDownloadButton > button p,
+html body .stApp div[role="dialog"] .stDownloadButton > button span {
+  color: var(--vf-dialog-text) !important;
+}
+html body .stApp div[role="dialog"] .stButton > button[kind="primary"],
+html body .stApp div[role="dialog"] .stDownloadButton > button[kind="primary"] {
+  background: #171717 !important;
+  border-color: #171717 !important;
+  color: #ffffff !important;
+}
+html body .stApp div[role="dialog"] .stButton > button[kind="primary"] p,
+html body .stApp div[role="dialog"] .stButton > button[kind="primary"] span,
+html body .stApp div[role="dialog"] .stDownloadButton > button[kind="primary"] p,
+html body .stApp div[role="dialog"] .stDownloadButton > button[kind="primary"] span {
+  color: #ffffff !important;
+}
+html body .stApp div[role="dialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"],
+html body .stApp div[data-testid="stDialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] {
+  background: #ffffff !important;
+  border-color: rgba(28, 25, 23, 0.16) !important;
+  color: var(--vf-dialog-text) !important;
+}
+html body .stApp div[role="dialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] *,
+html body .stApp div[data-testid="stDialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] * {
+  color: var(--vf-dialog-text) !important;
+}
+html body .stApp div[role="dialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"],
+html body .stApp div[data-testid="stDialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"] {
+  background: #171717 !important;
+  border-color: #171717 !important;
+  color: #ffffff !important;
+}
+html body .stApp div[role="dialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"] *,
+html body .stApp div[data-testid="stDialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"] * {
+  color: #ffffff !important;
+}
+div[role="dialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"],
+div[data-testid="stDialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] {
+  background: #ffffff !important;
+  border-color: rgba(28, 25, 23, 0.16) !important;
+  color: var(--vf-dialog-text) !important;
+}
+div[role="dialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] *,
+div[data-testid="stDialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] * {
+  color: var(--vf-dialog-text) !important;
+}
+div[role="dialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"],
+div[data-testid="stDialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"] {
+  background: #171717 !important;
+  border-color: #171717 !important;
+  color: #ffffff !important;
+}
+div[role="dialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"] *,
+div[data-testid="stDialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"] * {
+  color: #ffffff !important;
+}
+div[data-testid="stDialog"] div[data-baseweb="select"] > div,
+div[data-testid="stDialog"] div[data-baseweb="input"] > div,
+div[data-testid="stDialog"] textarea,
+div[data-testid="stDialog"] input,
+div[role="dialog"] div[data-baseweb="select"] > div,
+div[role="dialog"] div[data-baseweb="input"] > div,
+div[role="dialog"] textarea,
+div[role="dialog"] input {
+  background-color: #ffffff !important;
+  color: var(--vf-dialog-text) !important;
+  border-color: rgba(28, 25, 23, 0.16) !important;
+}
+div[data-testid="stDialog"] div[data-baseweb="radio"] label,
+div[data-testid="stDialog"] div[data-baseweb="radio"] span,
+div[role="dialog"] div[data-baseweb="radio"] label,
+div[role="dialog"] div[data-baseweb="radio"] span {
+  color: var(--vf-dialog-text) !important;
+}
+div[data-testid="stDialog"] .vf-dialog-heading,
+div[role="dialog"] .vf-dialog-heading {
+  border-bottom-color: rgba(28, 25, 23, 0.12) !important;
+}
+div[data-testid="stDialog"] .vf-level-pill,
+div[role="dialog"] .vf-level-pill {
+  background: var(--vf-dialog-subtle) !important;
+  border-color: rgba(28, 25, 23, 0.12) !important;
+  color: var(--vf-dialog-muted) !important;
+}
+div[data-testid="stDialog"] .vf-level-pill strong,
+div[role="dialog"] .vf-level-pill strong {
+  color: var(--vf-dialog-text) !important;
+}
+.vf-topbar {
+  min-height: 56px;
+  padding-bottom: .75rem;
+  border-bottom: 1px solid var(--vf-line);
+  margin-bottom: 1.4rem;
+}
+.vf-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: .65rem;
+  color: var(--vf-text);
+  font-size: 1.02rem;
+  font-weight: 720;
+}
+.vf-brand-mark {
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--vf-accent);
+  color: var(--vf-accent-contrast);
+  font-size: .8rem;
+  box-shadow: var(--vf-shadow-soft);
+}
+.vf-status {
+  color: var(--vf-muted);
+  font-size: .82rem;
+  line-height: 1.25;
+  text-align: right;
+  white-space: nowrap;
+}
+.vf-status strong {
+  color: var(--vf-text);
+  font-size: 1rem;
+  font-weight: 720;
+}
+.vf-top-rule {
+  display: none;
+}
+.vf-settings-panel {
+  padding: .15rem .1rem .3rem;
+}
+.vf-dialog-heading {
+  margin: 0 0 .9rem;
+  padding-bottom: .75rem;
+  border-bottom: 1px solid var(--vf-line);
+}
+.vf-dialog-heading h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  letter-spacing: 0;
+}
+.vf-dialog-heading p {
+  margin: .25rem 0 0;
+  color: var(--vf-muted);
+  font-size: .92rem;
+}
+.vf-nav-note {
+  color: var(--vf-muted);
+  font-size: .8rem;
+  line-height: 1.5;
+  padding: .75rem .2rem 0;
+}
+.vf-analysis-shell {
+  border: 1px solid var(--vf-line);
+  border-radius: var(--vf-radius-2xl);
+  background: var(--vf-surface);
+  padding: 1.35rem;
+  box-shadow: var(--vf-shadow);
+  backdrop-filter: blur(22px);
+}
+.vf-workspace-heading {
+  margin-bottom: 1rem;
+}
+.vf-workspace-heading h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.8vw, 2.25rem);
+  line-height: 1.12;
+}
+.vf-workspace-heading p {
+  max-width: 720px;
+  margin: .45rem 0 0;
+  color: var(--vf-muted);
+  font-size: .96rem;
+  line-height: 1.7;
+}
+.vf-section-label {
+  color: var(--vf-warm);
+  font-size: .76rem;
+  font-weight: 740;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  margin-bottom: .45rem;
+}
+.vf-export {
+  margin-top: 1.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--vf-line);
+}
+.vf-note {
+  color: var(--vf-muted);
+  font-size: .92rem;
+  line-height: 1.55;
+}
+.vf-level-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .45rem;
+  border: 1px solid var(--vf-line);
+  border-radius: 999px;
+  background: var(--vf-surface);
+  padding: .45rem .75rem;
+  color: var(--vf-muted);
+  font-size: .84rem;
+  box-shadow: var(--vf-shadow-soft);
+}
+.vf-level-pill strong {
+  color: var(--vf-text);
+  font-size: .98rem;
+}
+.stApp {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.stApp::after {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.08) 100%);
+  z-index: 0;
+}
+.block-container {
+  max-width: 1230px;
+  padding-top: 2rem;
+}
+.vf-topbar {
+  display: flex;
+  align-items: center;
+  padding-bottom: 1.35rem;
+  border-bottom: 0;
+  margin-bottom: clamp(2.5rem, 7vh, 5rem);
+}
+.vf-brand {
+  font-size: .96rem;
+  font-weight: 680;
+}
+.vf-brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  box-shadow: 0 0 0 .5px rgba(255, 255, 255, .14), var(--vf-shadow-soft);
+}
+.vf-status {
+  color: var(--vf-muted);
+  font-size: .72rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.vf-status strong {
+  display: inline-block;
+  margin-top: .12rem;
+  color: var(--vf-text);
+  font-size: .98rem;
+  letter-spacing: 0;
+}
+.vf-workspace-heading {
+  width: min(760px, 100%);
+  margin: 0 auto 1.45rem;
+  text-align: center;
+  animation: vf-rise 420ms cubic-bezier(.165, .84, .44, 1) both;
+}
+.vf-workspace-heading h2 {
+  font-size: clamp(2.05rem, 5vw, 3.25rem);
+  font-weight: 660;
+  line-height: 1;
+}
+.vf-workspace-heading p {
+  margin: .7rem auto 0;
+  max-width: 520px;
+  color: var(--vf-muted);
+  font-size: clamp(1rem, 2vw, 1.12rem);
+  line-height: 1.35;
+}
+.vf-workspace-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: 1rem;
+  padding: .42rem .68rem .42rem .48rem;
+  border-radius: 999px;
+  background: var(--vf-surface-soft);
+  color: var(--vf-muted);
+  box-shadow: 0 0 0 .5px var(--vf-line), var(--vf-shadow-soft);
+  backdrop-filter: blur(10px);
+  font-size: .84rem;
+  font-weight: 520;
+}
+.vf-workspace-kicker strong {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.55rem;
+  padding: .18rem .48rem;
+  border-radius: 999px;
+  background: var(--vf-warm);
+  color: #ffffff;
+  font-size: .72rem;
+  font-weight: 700;
+}
+.vf-analysis-shell {
+  width: min(768px, 100%);
+  margin: 0 auto;
+  padding: .75rem;
+  border: 1px solid var(--vf-shell-line);
+  border-radius: 28px;
+  background: var(--vf-shell);
+  color: var(--vf-shell-text);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .42), var(--vf-shadow);
+  backdrop-filter: blur(18px);
+  animation: vf-rise 520ms cubic-bezier(.165, .84, .44, 1) 80ms both;
+}
+.vf-analysis-shell:hover {
+  border-color: var(--vf-line-strong);
+  transform: translateY(-1px);
+}
+.vf-analysis-shell [data-testid="stWidgetLabel"] {
+  min-height: 0;
+}
+.vf-analysis-shell [data-testid="stWidgetLabel"] p {
+  display: none;
+}
+.vf-analysis-shell [data-testid="stTextArea"],
+.vf-analysis-shell [data-testid="stFileUploader"] {
+  margin-bottom: .35rem;
+}
+.vf-analysis-shell [data-testid="stFileUploaderDropzone"] {
+  min-height: 44px;
+  padding: .35rem .55rem;
+  border-style: solid;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+}
+.vf-analysis-shell [data-testid="stFileUploaderDropzone"] button {
+  min-height: 34px;
+  border-radius: 999px;
+}
+.vf-analysis-shell textarea {
+  min-height: 128px !important;
+  max-height: max(35svh, 13rem);
+  padding: .75rem .85rem !important;
+  border: 0 !important;
+  border-radius: 20px !important;
+  background: transparent !important;
+  color: var(--vf-shell-text) !important;
+  -webkit-text-fill-color: var(--vf-shell-text) !important;
+  box-shadow: none !important;
+  resize: vertical;
+}
+.vf-analysis-shell textarea::placeholder {
+  color: var(--vf-shell-muted) !important;
+}
+.vf-analysis-shell .stButton > button {
+  min-height: 42px;
+  border-radius: 999px;
+  background: var(--vf-shell-button) !important;
+  border-color: transparent !important;
+  color: var(--vf-shell-button-text) !important;
+  box-shadow: var(--vf-shadow-soft);
+}
+.vf-analysis-shell .stButton > button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--vf-shadow);
+}
+[data-testid="stFileUploader"],
+[data-testid="stTextArea"] {
+  width: min(768px, 100%) !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+[data-testid="stFileUploader"] {
+  margin-bottom: .55rem;
+}
+[data-testid="stFileUploaderDropzone"] {
+  min-height: 58px;
+  padding: .42rem .75rem;
+  border-style: solid;
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--vf-shell) 76%, transparent);
+}
+[data-testid="stFileUploaderDropzone"]:hover {
+  border-color: var(--vf-line-strong);
+}
+[data-testid="stTextArea"] textarea {
+  min-height: 146px !important;
+  max-height: max(35svh, 12rem);
+  padding: 1rem !important;
+  border-radius: 28px !important;
+  background-color: var(--vf-shell) !important;
+  border-color: var(--vf-shell-line) !important;
+  color: var(--vf-shell-text) !important;
+  -webkit-text-fill-color: var(--vf-shell-text) !important;
+  box-shadow: 0 0 0 1px var(--vf-shell-ring), var(--vf-shadow);
+}
+[data-testid="stTextArea"] textarea::placeholder {
+  color: var(--vf-shell-muted) !important;
+}
+div[data-testid="stButton"]:has(button[kind="primary"]) {
+  width: min(768px, 100%) !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+div[data-testid="stButton"]:has(button[kind="primary"]) > button {
+  border-radius: 999px;
+}
+.vf-settings-panel {
+  padding: .2rem 0 .6rem;
+}
+.vf-dialog-heading {
+  margin: 0 0 1.2rem;
+  padding-bottom: 1rem;
+}
+.vf-dialog-heading h2 {
+  font-size: 1.72rem;
+  line-height: 1.1;
+  font-weight: 720;
+}
+.vf-dialog-heading p {
+  max-width: 560px;
+  font-size: .95rem;
+  line-height: 1.5;
+}
+.vf-section-label {
+  margin: 0 0 .75rem;
+  color: var(--vf-warm);
+  font-size: .68rem;
+  font-weight: 760;
+  letter-spacing: .14em;
+}
+.vf-setting-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+  margin-bottom: 1.2rem;
+}
+.vf-level-pill {
+  min-height: 34px;
+  border: 1px solid var(--vf-line);
+  background: var(--vf-surface-soft);
+  box-shadow: var(--vf-shadow-soft);
+}
+.vf-nav-note {
+  display: none;
+}
+.vf-export {
+  margin-top: 1.35rem;
+  border-top-color: var(--vf-line);
+}
+div[data-testid="stMetric"] {
+  border-radius: 16px;
+  background: var(--vf-surface-soft);
+}
+.stTabs [data-baseweb="tab-list"] {
+  border-bottom-color: var(--vf-line);
+}
+.stTabs [data-baseweb="tab"] {
+  border-radius: 999px;
+}
+div[data-testid="stDialog"] div[role="dialog"],
+div[role="dialog"] {
+  border-color: var(--vf-line) !important;
+  background: var(--vf-dialog-bg) !important;
+  color: var(--vf-dialog-text) !important;
+  box-shadow: 0 32px 100px -48px rgba(0, 0, 0, .88) !important;
+}
+html body .stApp div[role="dialog"] .stButton > button,
+html body .stApp div[role="dialog"] .stDownloadButton > button,
+div[role="dialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"],
+div[data-testid="stDialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-secondary"] {
+  background: var(--vf-dialog-subtle) !important;
+  border-color: var(--vf-line) !important;
+  color: var(--vf-dialog-text) !important;
+}
+html body .stApp div[role="dialog"] .stButton > button:hover,
+html body .stApp div[role="dialog"] .stDownloadButton > button:hover {
+  background: var(--vf-surface-soft) !important;
+}
+html body .stApp div[role="dialog"] .stButton > button[kind="primary"],
+html body .stApp div[role="dialog"] .stDownloadButton > button[kind="primary"],
+div[role="dialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"],
+div[data-testid="stDialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"] {
+  background: var(--vf-accent) !important;
+  border-color: transparent !important;
+  color: var(--vf-accent-contrast) !important;
+}
+html body .stApp div[role="dialog"] .stButton > button[kind="primary"] *,
+html body .stApp div[role="dialog"] .stDownloadButton > button[kind="primary"] *,
+div[role="dialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"] *,
+div[data-testid="stDialog"] div[data-testid="stButton"] button[data-testid="stBaseButton-primary"] * {
+  color: var(--vf-accent-contrast) !important;
+}
+div[data-testid="stDialog"] div[data-baseweb="select"] > div,
+div[data-testid="stDialog"] div[data-baseweb="input"] > div,
+div[data-testid="stDialog"] textarea,
+div[data-testid="stDialog"] input,
+div[role="dialog"] div[data-baseweb="select"] > div,
+div[role="dialog"] div[data-baseweb="input"] > div,
+div[role="dialog"] textarea,
+div[role="dialog"] input {
+  background-color: var(--vf-dialog-subtle) !important;
+  color: var(--vf-dialog-text) !important;
+  border-color: var(--vf-line) !important;
+}
+div[data-testid="stRadio"] > div {
+  gap: .45rem;
+}
+div[data-testid="stRadio"] label {
+  padding: .2rem .35rem;
+  border-radius: 999px;
+}
+div[data-testid="stRadio"] [data-baseweb="radio"] {
+  margin-right: .2rem;
+}
+div[data-baseweb="select"] input {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  caret-color: transparent !important;
+}
+div[data-baseweb="select"] > div,
+div[data-baseweb="input"] > div,
+textarea,
+input:not([type="checkbox"]):not([type="radio"]) {
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+div[data-baseweb="select"] > div:focus-within,
+div[data-baseweb="input"] > div:focus-within,
+textarea:focus,
+input:not([type="checkbox"]):not([type="radio"]):focus {
+  border-color: var(--vf-warm) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vf-warm) 16%, transparent) !important;
+}
+div[data-baseweb="popover"] [role="listbox"],
+div[data-baseweb="popover"] ul {
+  background: var(--vf-surface-solid) !important;
+  color: var(--vf-text) !important;
+}
+div[data-baseweb="popover"] [role="option"],
+div[data-baseweb="popover"] li {
+  color: var(--vf-text) !important;
+}
+div[data-baseweb="popover"] [aria-selected="true"] {
+  background: var(--vf-accent-soft) !important;
+  color: var(--vf-text) !important;
+}
+.vf-analysis-shell {
+  box-shadow: 0 0 0 1px var(--vf-shell-ring), var(--vf-shadow);
+}
+[data-testid="stTextArea"] textarea,
+.vf-analysis-shell textarea {
+  border: 1px solid var(--vf-shell-line) !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+[data-testid="stTextAreaRootElement"],
+[data-testid="stTextAreaRootElement"] > div {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+[data-testid="stTextArea"] textarea:focus,
+.vf-analysis-shell textarea:focus {
+  border-color: var(--vf-warm) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--vf-warm) 14%, transparent) !important;
+}
+div[role="dialog"] {
+  font-size: 1rem;
+}
+div[role="dialog"] [data-testid="stWidgetLabel"] p {
+  font-size: .96rem;
+  font-weight: 640;
+}
+div[role="dialog"] div[data-baseweb="select"] > div,
+div[role="dialog"] div[data-baseweb="input"] > div,
+div[role="dialog"] textarea,
+div[role="dialog"] input:not([type="checkbox"]):not([type="radio"]) {
+  font-size: .98rem !important;
+}
+div[data-testid="stNumberInput"] button,
+div[role="dialog"] div[data-testid="stNumberInput"] button {
+  background: var(--vf-dialog-subtle) !important;
+  border-color: var(--vf-line) !important;
+  color: var(--vf-dialog-text) !important;
+}
+div[data-testid="stNumberInput"] button:hover,
+div[role="dialog"] div[data-testid="stNumberInput"] button:hover {
+  background: var(--vf-surface-soft) !important;
+}
+div[data-testid="stNumberInput"] button *,
+div[role="dialog"] div[data-testid="stNumberInput"] button * {
+  color: var(--vf-dialog-text) !important;
+  fill: var(--vf-dialog-text) !important;
+}
+div[data-testid="stNumberInput"] div[data-baseweb="input"] > div,
+div[role="dialog"] div[data-testid="stNumberInput"] div[data-baseweb="input"] > div {
+  border-color: var(--vf-line) !important;
+  box-shadow: none !important;
+}
+div[data-testid="stNumberInputContainer"],
+div[data-testid="stNumberInput"] div[data-baseweb="input"],
+div[role="dialog"] div[data-testid="stNumberInputContainer"],
+div[role="dialog"] div[data-testid="stNumberInput"] div[data-baseweb="input"] {
+  background: var(--vf-dialog-subtle) !important;
+  border-color: var(--vf-line) !important;
+  box-shadow: none !important;
+}
+div[data-testid="stRadio"] > div {
+  gap: .55rem;
+}
+div[data-testid="stRadio"] label:has(input[type="radio"]) {
+  min-height: 36px;
+  margin: 0 .25rem .35rem 0;
+  padding: .46rem .75rem !important;
+  border: 1px solid var(--vf-line);
+  border-radius: 999px;
+  background: var(--vf-surface-solid);
+  color: var(--vf-muted) !important;
+  box-shadow: var(--vf-shadow-soft);
+}
+div[data-testid="stRadio"] label:has(input[type="radio"]) * {
+  color: inherit !important;
+}
+div[data-testid="stRadio"] label:has(input[type="radio"]:checked) {
+  background: var(--vf-accent);
+  border-color: var(--vf-accent);
+  color: var(--vf-accent-contrast) !important;
+}
+div[data-testid="stRadio"] [data-baseweb="radio"] {
+  width: auto !important;
+  min-width: auto !important;
+  margin-right: .35rem !important;
+  opacity: 1 !important;
+  overflow: visible !important;
+}
+div[data-testid="stRadio"] label:not(:has(input[type="radio"]:checked)) [data-baseweb="radio"] {
+  opacity: .35 !important;
+}
+div[role="dialog"] div[data-testid="stRadio"] label:has(input[type="radio"]) {
+  background: var(--vf-dialog-subtle);
+  border-color: var(--vf-line);
+  color: var(--vf-dialog-muted) !important;
+  font-size: .98rem;
+}
+div[role="dialog"] div[data-testid="stRadio"] label:has(input[type="radio"]:checked) {
+  background: var(--vf-accent);
+  border-color: var(--vf-accent);
+  color: var(--vf-accent-contrast) !important;
+}
+div[role="dialog"] div[data-testid="stRadio"] label:has(input[type="radio"]:checked) * {
+  color: var(--vf-accent-contrast) !important;
+}
+@keyframes vf-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 820px) {
+  .block-container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  .vf-topbar {
+    margin-bottom: 2.2rem;
+  }
+  .vf-workspace-heading {
+    text-align: left;
+  }
+  .vf-workspace-heading h2 {
+    font-size: 2.2rem;
+  }
+  .vf-analysis-shell {
+    padding: .6rem;
+    border-radius: 24px;
+  }
+}
+</style>
+        """.replace("__TOKENS__", tokens).replace("__APP_BACKGROUND__", app_background),
+        unsafe_allow_html=True,
+    )
 
 
 def init_state() -> None:
-    st.session_state.setdefault("level_source", "考试成绩换算")
+    st.session_state.setdefault("theme_mode", "深色")
+    st.session_state.setdefault("level_source", None)
     st.session_state.setdefault("exam_type", "CET-6 六级")
+    st.session_state.setdefault("exam_score", None)
     st.session_state.setdefault("measured_level", None)
     st.session_state.setdefault("placement_notice", "")
-    st.session_state.setdefault("manual_cefr", "B2")
+    st.session_state.setdefault("manual_cefr", None)
+    st.session_state.setdefault("cefr_source", "自动选择")
+    st.session_state.setdefault("known_extra_words", set())
+    st.session_state.setdefault("settings_menu_section", "常规")
+    st.session_state.setdefault("level_settings_show_placement", False)
+
+
+def default_exam_score(exam: str) -> float | int:
+    if exam == "IELTS 雅思":
+        return 6.0
+    if exam == "TOEFL iBT 托福":
+        return 80
+    if exam == "Duolingo English Test":
+        return 115
+    if exam == "高考英语":
+        return 120
+    return 500
+
+
+def current_level_from_state() -> tuple[str | None, str, str]:
+    level_source = st.session_state.get("level_source")
+
+    if level_source == "考试成绩换算":
+        exam = st.session_state.get("exam_type", "CET-6 六级")
+        score = st.session_state.get("exam_score")
+        if score is None:
+            return None, "missing", "尚未确定英语水平。"
+        estimate = score_to_cefr(exam, float(score))
+        return estimate.level, "exam", estimate.note
+
+    if level_source == "快速测评结果":
+        measured = st.session_state.get("measured_level")
+        if measured:
+            return measured, "placement", "来自快速测评。"
+        return None, "missing", "尚未完成测评。"
+
+    if level_source == "手动选择 CEFR":
+        user_level = st.session_state.get("manual_cefr")
+        if user_level:
+            return user_level, "manual", "手动选择。"
+
+    return None, "missing", "尚未确定英语水平。"
+
+
+def cefr_runtime_settings() -> tuple[str, str]:
+    source = st.session_state.get("cefr_source", "自动选择")
+    if source == "本地 CEFR 词库":
+        return "cefrpy", "data/cefr_seed.csv"
+    return "auto", "data/cefr_seed.csv"
 
 
 def decode_upload(uploaded_file) -> str:
@@ -58,6 +1160,23 @@ def decode_upload(uploaded_file) -> str:
         except UnicodeDecodeError:
             continue
     return raw.decode("utf-8", errors="ignore")
+
+
+def parse_personal_words(uploaded_file) -> set[str]:
+    if uploaded_file is None:
+        return set()
+    text = decode_upload(uploaded_file)
+    words: set[str] = set()
+    for line in text.splitlines():
+        clean = line.strip()
+        if not clean or clean.startswith("#"):
+            continue
+        for match in WORD_RE.finditer(clean):
+            surface = match.group(0)
+            lemma = simple_lemma(surface)
+            if lemma and not should_skip_token(surface, clean):
+                words.add(lemma.lower())
+    return words
 
 
 def rows_to_csv_bytes(rows: list[dict]) -> bytes:
@@ -79,10 +1198,11 @@ def compact_rows(rows: list[dict], include_score: bool = False) -> list[dict]:
             "词汇": row.get("lemma") or row.get("word") or "",
             "原文形式": row.get("word") or "",
             "CEFR": row.get("cefr") or "未知",
+            "中文释义": row.get("meaning_zh") or "暂无释义",
             "原文句子": row.get("sentence") or "",
         }
         if include_score:
-            item["系统评分"] = row.get("score", "")
+            item["评分"] = row.get("score", "")
         compact.append(item)
     return compact
 
@@ -97,11 +1217,26 @@ def proper_rows(rows: list[dict]) -> list[dict]:
     ]
 
 
-def show_table(rows: list[dict], height: int = 420) -> None:
-    if pd is not None:
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, height=height, hide_index=True)
-    else:
+def show_table(rows: list[dict], height: int = 430) -> None:
+    if pd is None:
         st.write(rows)
+        return
+
+    column_config = {
+        "词汇": st.column_config.TextColumn("词汇", width="small"),
+        "原文形式": st.column_config.TextColumn("原文形式", width="small"),
+        "CEFR": st.column_config.TextColumn("CEFR", width="small"),
+        "评分": st.column_config.NumberColumn("评分", width="small"),
+        "中文释义": st.column_config.TextColumn("中文释义", width="medium"),
+        "原文句子": st.column_config.TextColumn("原文句子", width="large"),
+    }
+    st.dataframe(
+        pd.DataFrame(rows),
+        use_container_width=True,
+        height=height,
+        hide_index=True,
+        column_config=column_config,
+    )
 
 
 def get_export_rows(result, scope: str) -> list[dict]:
@@ -125,243 +1260,367 @@ def get_export_bytes(rows: list[dict], scope: str, fmt: str) -> tuple[bytes, str
         RESULT_LABELS["all"]: "all_results",
     }[scope]
     if fmt == "Markdown (.md)":
-        title = scope
-        return rows_to_markdown(rows, title).encode("utf-8"), f"{slug}.md", "text/markdown"
+        return rows_to_markdown(rows, scope).encode("utf-8"), f"{slug}.md", "text/markdown"
     return rows_to_csv_bytes(rows), f"{slug}.csv", "text/csv"
 
 
-def level_settings() -> tuple[str, str]:
-    st.sidebar.subheader("水平设置")
-    level_source = st.sidebar.radio(
+def render_level_settings() -> None:
+    st.markdown('<div class="vf-section-label">LEVEL</div>', unsafe_allow_html=True)
+    level_options = ["快速测评结果", "考试成绩换算", "手动选择 CEFR"]
+    current_source = st.session_state.get("level_source")
+    if "level_source_choice" not in st.session_state:
+        st.session_state.level_source_choice = current_source if current_source in level_options else "快速测评结果"
+    level_source = st.radio(
         "确定方式",
-        ["考试成绩换算", "快速测评结果", "手动选择 CEFR"],
-        key="level_source",
+        level_options,
+        key="level_source_choice",
+        horizontal=True,
     )
 
     if st.session_state.placement_notice:
-        st.sidebar.success(st.session_state.placement_notice)
+        st.success(st.session_state.placement_notice)
         st.session_state.placement_notice = ""
 
     if level_source == "考试成绩换算":
-        exam = st.sidebar.selectbox(
+        exam_options = ["CET-4 四级", "CET-6 六级", "IELTS 雅思", "TOEFL iBT 托福", "Duolingo English Test", "高考英语"]
+        current_exam = st.session_state.get("draft_exam_type") or st.session_state.get("exam_type", "CET-6 六级")
+        exam = st.selectbox(
             "考试类型",
-            ["CET-4 四级", "CET-6 六级", "IELTS 雅思", "TOEFL iBT 托福", "Duolingo English Test", "高考英语"],
-            key="exam_type",
+            exam_options,
+            index=exam_options.index(current_exam) if current_exam in exam_options else 1,
+            key="draft_exam_type",
         )
+        if st.session_state.get("_draft_exam_score_for") != exam:
+            saved_score = st.session_state.get("exam_score") if st.session_state.get("exam_type") == exam else None
+            st.session_state.draft_exam_score = saved_score if saved_score is not None else default_exam_score(exam)
+            st.session_state._draft_exam_score_for = exam
         if exam == "IELTS 雅思":
-            score = st.sidebar.number_input("成绩", min_value=0.0, max_value=9.0, value=6.0, step=0.5)
-        elif exam == "TOEFL iBT 托福":
-            score = st.sidebar.number_input("成绩", min_value=0, max_value=120, value=80, step=1)
-        elif exam == "Duolingo English Test":
-            score = st.sidebar.number_input("成绩", min_value=10, max_value=160, value=115, step=5)
-        elif exam == "高考英语":
-            score = st.sidebar.number_input("成绩", min_value=0, max_value=150, value=120, step=1)
+            st.session_state.draft_exam_score = float(st.session_state.draft_exam_score)
         else:
-            score = st.sidebar.number_input("成绩", min_value=0, max_value=710, value=500, step=1)
-        estimate = score_to_cefr(exam, float(score))
-        user_level = estimate.level
-        st.sidebar.info(f"当前筛词等级：{user_level}\n\n{estimate.note}")
-        with st.sidebar.expander("查看换算规则"):
-            st.markdown(
-                """
-- 四级：425-549 → B1；550+ → B2  
-- 六级：425-599 → B2；600+ → C1  
-- 雅思：5.5-6.5 → B2；7.0-8.0 → C1  
-- 托福 iBT：72-94 → B2；95-113 → C1  
-- Duolingo：110-125 → B2；130-145 → C1  
+            st.session_state.draft_exam_score = int(round(float(st.session_state.draft_exam_score)))
+        if exam == "IELTS 雅思":
+            st.number_input("成绩", min_value=0.0, max_value=9.0, step=0.5, format="%.1f", key="draft_exam_score")
+        elif exam == "TOEFL iBT 托福":
+            st.number_input("成绩", min_value=0, max_value=120, step=1, format="%d", key="draft_exam_score")
+        elif exam == "Duolingo English Test":
+            st.number_input("成绩", min_value=10, max_value=160, step=5, format="%d", key="draft_exam_score")
+        elif exam == "高考英语":
+            st.number_input("成绩", min_value=0, max_value=150, step=1, format="%d", key="draft_exam_score")
+        else:
+            st.number_input("成绩", min_value=0, max_value=710, step=1, format="%d", key="draft_exam_score")
+        estimate = score_to_cefr(exam, float(st.session_state.draft_exam_score))
+        st.markdown(
+            f'<div class="vf-setting-summary"><span class="vf-level-pill">换算结果 <strong>{estimate.level}</strong></span></div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("使用这个水平", type="primary", use_container_width=True, key="apply_exam_level"):
+            st.session_state.exam_type = exam
+            st.session_state.exam_score = st.session_state.draft_exam_score
+            st.session_state.level_source = "考试成绩换算"
+            st.session_state.placement_notice = f"已按 {exam} {st.session_state.draft_exam_score:g} 应用：{estimate.level}。"
+            st.rerun()
 
-这些规则只用于筛词阈值，不代表正式语言能力认证。
-"""
-            )
-        return user_level, "exam"
+    elif level_source == "快速测评结果":
+        if not st.session_state.get("measured_level"):
+            st.info("还没有测评结果，先完成一次测评。")
+        if st.button("开始测评", type="primary", use_container_width=True, key="start_placement_from_level"):
+            st.session_state.level_settings_show_placement = True
+        if st.session_state.get("level_settings_show_placement"):
+            render_placement_settings(show_heading=False)
+        elif st.session_state.get("measured_level"):
+            if st.button("使用测评结果", type="primary", use_container_width=True, key="apply_measured_level"):
+                st.session_state.level_source = "快速测评结果"
+                st.session_state.placement_notice = f"已应用测评结果：{st.session_state.measured_level}。"
+                st.rerun()
 
-    if level_source == "快速测评结果":
-        measured = st.session_state.get("measured_level")
-        if measured:
-            st.sidebar.info(f"当前筛词等级：{measured}\n\n来自快速测评。")
-            return measured, "placement"
-        st.sidebar.warning("还没有测评结果。请到“词汇水平测评”完成一次测试。暂按 B2 处理。")
-        return "B2", "placement"
-
-    user_level = st.sidebar.selectbox("CEFR 等级", CEFR_OPTIONS, index=CEFR_OPTIONS.index(st.session_state.get("manual_cefr", "B2")), key="manual_cefr")
-    st.sidebar.info(f"当前筛词等级：{user_level}")
-    return user_level, "manual"
-
-
-def cefr_settings() -> tuple[str, str, object | None]:
-    st.sidebar.subheader("词库设置")
-    source = st.sidebar.selectbox("CEFR 词库", CEFR_SOURCE_OPTIONS)
-    uploaded_csv = None
-
-    if source == "自动":
-        backend = "auto"
-        cefr_path = "data/cefr_seed.csv"
-        st.sidebar.caption("自动选择可用词库。")
-    elif source == "内置词库":
-        backend = "cefrpy"
-        cefr_path = "data/cefr_seed.csv"
-        st.sidebar.caption("使用项目依赖提供的 A1-C2 词库；不可用时退回本地备用词库。")
-    else:
-        backend = "csv"
-        uploaded_csv = st.sidebar.file_uploader("上传 CSV：word,level", type=["csv"], key="cefr_csv")
-        cefr_path = "data/cefr_seed.csv"
-
-    return backend, cefr_path, uploaded_csv
+    elif level_source == "手动选择 CEFR":
+        selected = st.session_state.get("manual_cefr") or "B1"
+        st.selectbox(
+            "CEFR 等级",
+            CEFR_OPTIONS,
+            index=CEFR_OPTIONS.index(selected) if selected in CEFR_OPTIONS else 2,
+            key="manual_cefr_choice",
+        )
+        if st.button("使用这个等级", type="primary", use_container_width=True, key="apply_manual_level"):
+            st.session_state.manual_cefr = st.session_state.manual_cefr_choice
+            st.session_state.level_source = "手动选择 CEFR"
+            st.session_state.placement_notice = f"已应用手动等级：{st.session_state.manual_cefr}。"
+            st.rerun()
 
 
-init_state()
+def render_personalization_settings() -> None:
+    st.markdown('<div class="vf-section-label">PERSONAL</div>', unsafe_allow_html=True)
+    known_file = st.file_uploader("已掌握词", type=["txt", "md"], key="known")
 
-st.title("📘 Vocab Filter")
-st.caption("上传英文材料，按你的实际水平筛出更值得优先处理的词汇。")
+    if known_file is not None:
+        st.session_state.known_extra_words = parse_personal_words(known_file)
 
-user_level, level_mode = level_settings()
-backend, default_cefr_path, custom_cefr = cefr_settings()
+    known_count = len(st.session_state.get("known_extra_words", set()))
+    st.markdown(
+        f'<div class="vf-setting-summary"><span class="vf-level-pill">已掌握 <strong>{known_count}</strong></span></div>',
+        unsafe_allow_html=True,
+    )
 
-with st.sidebar.expander("个人词库（可选）"):
-    known_file = st.file_uploader("已掌握词 known_words.txt", type=["txt"], key="known")
-    unknown_file = st.file_uploader("需复习词 unknown_words.txt", type=["txt"], key="unknown")
 
-analysis_tab, placement_tab, help_tab = st.tabs(["材料分析", "词汇水平测评", "说明"])
+def open_dialog(title: str, renderer, *, width: str = "large") -> bool:
+    dialog = getattr(st, "dialog", getattr(st, "experimental_dialog", None))
+    if dialog is None:
+        return False
 
-with analysis_tab:
-    st.subheader("材料输入")
+    try:
+        decorator = dialog(title, width=width)
+    except TypeError:
+        decorator = dialog(title)
+
+    @decorator
+    def dialog_body() -> None:
+        renderer()
+
+    dialog_body()
+    return True
+
+
+def render_general_settings() -> None:
+    st.markdown('<div class="vf-section-label">GENERAL</div>', unsafe_allow_html=True)
+    current_theme = st.session_state.get("theme_mode", "深色")
+    if "settings_theme_choice" not in st.session_state:
+        st.session_state.settings_theme_choice = current_theme
+    chosen_theme = st.radio("界面色调", ["浅色", "深色"], horizontal=True, key="settings_theme_choice")
+    if chosen_theme != current_theme:
+        st.session_state.theme_mode = chosen_theme
+        st.rerun()
+    render_personalization_settings()
+
+
+def render_topbar(user_level: str | None) -> None:
+    left, level_col, settings_col = st.columns([7.2, 1.05, .72])
+    with left:
+        st.markdown(
+            '<div class="vf-brand"><span class="vf-brand-mark">VF</span><span>Vocab Filter</span></div>',
+            unsafe_allow_html=True,
+        )
+    with level_col:
+        level_label = f"LEVEL {user_level}" if user_level else "LEVEL 待测评"
+        if st.button(level_label, use_container_width=True, key="topbar_level"):
+            title = "重新测试" if user_level else "英语水平测评"
+            if not open_dialog(title, render_placement_settings):
+                st.session_state.placement_inline_open = True
+                st.rerun()
+    with settings_col:
+        if st.button("设置", use_container_width=True):
+            if not open_dialog("设置", render_settings_panel):
+                st.session_state.settings_inline_open = True
+                st.rerun()
+    st.markdown('<div class="vf-top-rule"></div>', unsafe_allow_html=True)
+
+
+def render_analysis(
+    user_level: str | None,
+    backend: str,
+    default_cefr_path: str,
+    known_extra: set[str],
+) -> None:
+    st.markdown(
+        """
+<div class="vf-workspace-heading">
+  <div class="vf-workspace-kicker"><strong>VF</strong><span>Level-aware vocabulary filter</span></div>
+  <h2>筛出值得学的词</h2>
+  <p>上传或粘贴英文材料。</p>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
     uploaded = st.file_uploader(
-        "拖入 TXT / MD / CSV 文件",
+        "文件",
         type=["txt", "md", "csv"],
         accept_multiple_files=False,
+        key="analysis_upload",
+        label_visibility="collapsed",
     )
     pasted_text = st.text_area(
-        "或者直接粘贴英文文章 / 词表",
-        height=180,
-        placeholder="Paste an article, notes, or a word list here...",
+        "文本",
+        height=210,
+        placeholder="Paste an article, notes, or a word list...",
+        key="analysis_text",
+        label_visibility="collapsed",
     )
-    analyze_btn = st.button("开始分析", type="primary", use_container_width=True)
+    analyze_btn = st.button("分析", type="primary", use_container_width=True, key="analyze_button")
 
     if analyze_btn:
-        if uploaded is None and not pasted_text.strip():
+        if user_level is None:
+            st.warning("请先完成测评或选择英语水平，再开始分析。")
+            if not open_dialog("英语水平测评", render_placement_settings):
+                st.session_state.placement_inline_open = True
+                st.rerun()
+        elif uploaded is None and not pasted_text.strip():
             st.warning("请上传文件或粘贴文本。")
-        elif backend == "csv" and custom_cefr is None:
-            st.warning("你选择了“上传词库”，请上传包含 word,level 两列的 CSV 文件。")
         else:
             content = decode_upload(uploaded) if uploaded is not None else pasted_text
-            cefr_path = default_cefr_path
-            tmp_paths: list[str] = []
-            if custom_cefr is not None:
-                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
-                tmp.write(custom_cefr.getvalue())
-                tmp.close()
-                cefr_path = tmp.name
-                tmp_paths.append(tmp.name)
-
-            known_extra = set()
-            unknown_extra = set()
-            if known_file is not None:
-                known_extra = {w.strip().lower() for w in decode_upload(known_file).splitlines() if w.strip() and not w.strip().startswith("#")}
-            if unknown_file is not None:
-                unknown_extra = {w.strip().lower() for w in decode_upload(unknown_file).splitlines() if w.strip() and not w.strip().startswith("#")}
-
             with st.spinner("正在分析..."):
                 result = analyze_content(
                     content,
                     user_level=user_level,
                     input_mode="auto",
                     cefr_backend=backend,
-                    cefr_csv=cefr_path,
+                    cefr_csv=default_cefr_path,
+                    unknown_path=None,
                     known_words_extra=known_extra,
-                    unknown_words_extra=unknown_extra,
                 )
 
             st.session_state["last_result"] = result
             st.success("分析完成")
 
     result = st.session_state.get("last_result")
-    if result:
-        s = result.summary
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("建议学习词汇", s["likely_unknown"])
-        c2.metric("待确认词汇", s["borderline"])
-        c3.metric("暂不处理词汇", s["likely_known"])
-        c4.metric("专有名词", s["proper_nouns"])
+    if not result:
+        return
 
-        out1, out2, out3, out4 = st.tabs(["建议学习词汇", "待确认词汇", "暂不处理词汇", "专有名词"])
-        with out1:
-            show_table(compact_rows(result.likely_unknown, include_score=False))
-        with out2:
-            show_table(compact_rows(result.borderline, include_score=False))
-        with out3:
-            show_table(compact_rows(result.likely_known, include_score=False), height=320)
-        with out4:
-            show_table(proper_rows(result.proper_nouns), height=320)
+    s = result.summary
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("建议学习词汇", s["likely_unknown"])
+    c2.metric("待确认词汇", s["borderline"])
+    c3.metric("暂不处理词汇", s["likely_known"])
+    c4.metric("专有名词", s["proper_nouns"])
 
-        st.subheader("导出结果")
-        ec1, ec2, ec3 = st.columns([1, 1, 1])
-        with ec1:
-            export_scope = st.selectbox("导出范围", list(RESULT_LABELS.values()))
-        with ec2:
-            export_fmt = st.selectbox("导出格式", ["Markdown (.md)", "CSV (.csv)"])
-        export_rows = get_export_rows(result, export_scope)
-        data, filename, mime = get_export_bytes(export_rows, export_scope, export_fmt)
-        with ec3:
-            st.download_button("导出", data, file_name=filename, mime=mime, use_container_width=True)
+    out1, out2, out3, out4 = st.tabs(["建议学习词汇", "待确认词汇", "暂不处理词汇", "专有名词"])
+    with out1:
+        show_table(compact_rows(result.likely_unknown))
+    with out2:
+        show_table(compact_rows(result.borderline))
+    with out3:
+        show_table(compact_rows(result.likely_known), height=330)
+    with out4:
+        show_table(proper_rows(result.proper_nouns), height=330)
 
-with placement_tab:
-    st.subheader("词汇水平测评")
-    st.write("根据不同 CEFR 层级抽样。你只需要判断：认识 / 模糊 / 不认识。测评完成后，系统会自动把结果应用到左侧水平设置。")
+    st.markdown('<div class="vf-export">', unsafe_allow_html=True)
+    ec1, ec2, ec3 = st.columns([1, 1, 1])
+    with ec1:
+        export_scope = st.selectbox("导出范围", list(RESULT_LABELS.values()))
+    with ec2:
+        export_fmt = st.selectbox("导出格式", ["Markdown (.md)", "CSV (.csv)"])
+    export_rows = get_export_rows(result, export_scope)
+    data, filename, mime = get_export_bytes(export_rows, export_scope, export_fmt)
+    with ec3:
+        st.download_button("导出", data, file_name=filename, mime=mime, use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    mode = st.selectbox("测试完整度", list(TEST_MODES.keys()), index=1)
-    per_level = TEST_MODES[mode]
 
-    if st.button("开始 / 重新抽题") or "placement_words" not in st.session_state or st.session_state.get("placement_mode") != mode:
-        st.session_state.placement_words = sample_test_words(per_level=per_level)
-        st.session_state.placement_mode = mode
+def render_placement_settings(*, show_heading: bool = True) -> None:
+    if show_heading:
+        st.markdown(
+            """
+<div class="vf-dialog-heading">
+  <h2>英语水平</h2>
+  <p>完成 30 个词后应用筛词等级。</p>
+</div>
+        """,
+            unsafe_allow_html=True,
+        )
+    st.markdown('<div class="vf-section-label">PLACEMENT</div>', unsafe_allow_html=True)
+
+    if st.button("换一组词") or "placement_words" not in st.session_state:
+        st.session_state.placement_words = sample_test_words(per_level=PLACEMENT_WORDS_PER_LEVEL)
 
     responses = []
     with st.form("placement_form"):
-        for idx, item in enumerate(st.session_state.placement_words, start=1):
-            answer = st.radio(
-                f"{idx}. {item['word']}",
-                ["认识", "模糊", "不认识"],
-                index=2,
-                horizontal=True,
-                key=f"placement_{mode}_{idx}_{item['word']}",
-            )
-            responses.append({"word": item["word"], "level": item["level"], "answer": answer})
-        submitted = st.form_submit_button("完成测评并应用", type="primary")
+        for row_start in range(0, len(st.session_state.placement_words), 2):
+            cols = st.columns(2)
+            for offset, col in enumerate(cols):
+                item_index = row_start + offset
+                if item_index >= len(st.session_state.placement_words):
+                    continue
+                item = st.session_state.placement_words[item_index]
+                idx = item_index + 1
+                with col:
+                    answer = st.radio(
+                        f"{idx}. {item['word']}",
+                        ["认识", "模糊", "不认识"],
+                        index=2,
+                        horizontal=True,
+                        key=f"placement_{idx}_{item['word']}",
+                    )
+                    responses.append({"word": item["word"], "level": item["level"], "answer": answer})
+        submitted = st.form_submit_button("应用结果", type="primary")
 
     if submitted:
         est = estimate_level(responses)
         st.session_state.measured_level = est["suggested_level"]
         st.session_state.level_source = "快速测评结果"
+        st.session_state.level_source_choice = "快速测评结果"
         st.session_state.placement_notice = f"测评完成，已自动应用：{est['suggested_level']}。"
         st.session_state.placement_rates = est["rates"]
+        st.session_state.placement_inline_open = False
+        st.session_state.level_settings_show_placement = False
         st.rerun()
 
     if st.session_state.get("placement_rates"):
-        st.markdown("#### 最近一次测评结果")
+        st.markdown('<div class="vf-section-label">LAST RESULT</div>', unsafe_allow_html=True)
         rates = st.session_state["placement_rates"]
         display_rates = [{"CEFR": k, "认识率": f"{v:.0%}"} for k, v in rates.items()]
         show_table(display_rates, height=250)
 
-with help_tab:
+
+def render_help_settings() -> None:
     st.markdown(
         """
-### 使用流程
+### 词库
+自动模式优先使用 cefrpy，必要时回退到项目 CSV。
 
-1. 在左侧通过考试成绩、快速测评或手动选择确定筛词等级。  
-2. 选择词库来源。多数情况下保持“自动”即可。  
-3. 拖入 `.txt` / `.md` / `.csv`，或直接粘贴文本。  
-4. 点击“开始分析”。  
-5. 在“建议学习词汇”中查看结果，并在“导出结果”中选择范围和格式。
-
-### 结果分类
-
-- **建议学习词汇**：系统判断更值得优先处理的词。  
-- **待确认词汇**：接近当前水平，建议人工确认。  
-- **暂不处理词汇**：基础词、已掌握词或暂时不建议投入时间的词。  
-- **专有名词**：人名、地名、机构名等，不计入普通词汇学习。
-
-### 关于“原文句子”
-
-原文句子来自你上传或粘贴的材料，用来帮助你在上下文里回看这个词。
-"""
+### 个性化
+上传“已掌握词”可从建议学习词汇中排除。
+        """
     )
+
+
+def render_settings_panel() -> None:
+    st.markdown('<div class="vf-settings-panel">', unsafe_allow_html=True)
+    nav_col, content_col = st.columns([0.78, 2.05], gap="large")
+    with nav_col:
+        setting_sections = ["常规", "英语水平"]
+        if st.session_state.get("settings_menu_section") == "水平":
+            st.session_state.settings_menu_section = "英语水平"
+        if st.session_state.get("settings_menu_section") not in setting_sections:
+            st.session_state.settings_menu_section = "常规"
+        section = st.radio(
+            "设置区域",
+            setting_sections,
+            key="settings_menu_section",
+            label_visibility="collapsed",
+        )
+
+    with content_col:
+        if section == "常规":
+            render_general_settings()
+        else:
+            render_level_settings()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_inline_dialog_fallback() -> None:
+    if st.session_state.get("placement_inline_open"):
+        if st.button("关闭水平测评", key="close_placement_fallback"):
+            st.session_state.placement_inline_open = False
+            st.rerun()
+        render_placement_settings()
+
+    if st.session_state.get("settings_inline_open"):
+        if st.button("关闭设置", key="close_settings_fallback"):
+            st.session_state.settings_inline_open = False
+            st.rerun()
+        render_settings_panel()
+
+
+init_state()
+apply_style()
+
+user_level, level_mode, _ = current_level_from_state()
+backend, default_cefr_path = cefr_runtime_settings()
+known_extra = st.session_state.get("known_extra_words", set())
+
+render_topbar(user_level)
+render_inline_dialog_fallback()
+
+if user_level is None and not st.session_state.get("placement_inline_open") and not st.session_state.get("settings_inline_open"):
+    if not open_dialog("英语水平测评", render_placement_settings):
+        st.session_state.placement_inline_open = True
+
+render_analysis(user_level, backend, default_cefr_path, known_extra)

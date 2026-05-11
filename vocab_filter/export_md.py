@@ -26,6 +26,7 @@ def rows_to_markdown(rows: Iterable[dict], title: str = "建议学习词汇") ->
         if surface and surface != word:
             lines.append(f"- 原文形式：`{surface}`")
         lines.append(f"- CEFR：`{row.get('cefr') or '未知'}`")
+        lines.append(f"- 中文释义：{row.get('meaning_zh') or '暂无释义'}")
         if row.get("score") not in (None, ""):
             lines.append(f"- 系统评分：`{row.get('score')}`")
         sentence = (row.get("sentence") or "").strip()

@@ -16,6 +16,9 @@ class BaseLexicon:
     def available(self) -> bool:
         return True
 
+    def get_meaning(self, word: str) -> str:
+        return ""
+
 
 @dataclass
 class CSVLexicon(BaseLexicon):
@@ -30,6 +33,9 @@ class CSVLexicon(BaseLexicon):
 
     def available(self) -> bool:
         return bool(self.lexicon.mapping)
+
+    def get_meaning(self, word: str) -> str:
+        return self.lexicon.get_meaning(word)
 
 
 class CefrPyLexicon(BaseLexicon):
@@ -52,6 +58,9 @@ class CefrPyLexicon(BaseLexicon):
         word = word.lower().strip()
         if not word:
             return None
+
+    def get_meaning(self, word: str) -> str:
+        return ""
 
         # Prefer POS-specific lookup when spaCy provided a Penn Treebank tag.
         if pos:
@@ -98,6 +107,13 @@ class CompositeLexicon(BaseLexicon):
 
     def available(self) -> bool:
         return any(b.available() for b in self.backends)
+
+    def get_meaning(self, word: str) -> str:
+        for backend in self.backends:
+            meaning = backend.get_meaning(word)
+            if meaning:
+                return meaning
+        return ""
 
 
 def build_lexicon(

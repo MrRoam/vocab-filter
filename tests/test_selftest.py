@@ -10,6 +10,21 @@ def test_serendipitous_not_overstemmed():
 def test_common_edge_lemmas():
     assert simple_lemma("released") == "release"
     assert simple_lemma("robotics") == "robotics"
+    assert simple_lemma("mix") == "mix"
+
+
+def test_ocr_page_noise_is_skipped():
+    result = analyze_content(
+        "xv xv Contents xv 8.4.1 XB intricate mechanism was ubiquitous.",
+        user_level="B2",
+        input_mode="text",
+        cefr_backend="csv",
+        cefr_csv="data/cefr_seed.csv",
+    )
+    lemmas = {row["lemma"] for row in result.all_rows}
+    assert "xv" not in lemmas
+    assert "xb" not in lemmas
+    assert "intricate" in lemmas
 
 
 def test_known_overrides_level():

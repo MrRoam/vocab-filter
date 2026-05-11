@@ -8,6 +8,7 @@ from typing import Literal
 from .export_md import rows_to_markdown
 from .io_utils import read_word_set, write_rows
 from .lexicon import build_lexicon
+from .meanings import get_meaning
 from .preprocess import extract_from_text, extract_from_words
 from .scorer import score_word
 from .cefr import normalize_level
@@ -78,6 +79,7 @@ def analyze_content(
             continue
 
         cefr = lexicon.get(item.lemma, item.pos)
+        meaning_zh = lexicon.get_meaning(item.lemma) or get_meaning(item.lemma)
         result = score_word(item.lemma, cefr, level, known_words, unknown_words)
         rows.append({
             "word": item.surface,
@@ -86,6 +88,7 @@ def analyze_content(
             "label": result.label,
             "score": result.score,
             "cefr": result.cefr or "",
+            "meaning_zh": meaning_zh,
             "zipf": f"{result.zipf:.2f}",
             "reason": result.reason,
             "sentence": item.sentence,

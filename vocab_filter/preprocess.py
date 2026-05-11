@@ -5,6 +5,8 @@ import os
 import re
 
 TOKEN_RE = re.compile(r"[A-Za-z]+(?:[-'][A-Za-z]+)?")
+ROMAN_NUMERAL_RE = re.compile(r"(?i)^(?=[mdclxvi]+$)m{0,4}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$")
+ROMAN_WORD_EXCEPTIONS = {"mix"}
 
 @dataclass
 class WordItem:
@@ -17,7 +19,9 @@ class WordItem:
 
 def extract_from_words(raw: str) -> list[WordItem]:
     return dedupe_keep_first(
-        WordItem(m.group(0), simple_lemma(m.group(0)), pos="") for m in TOKEN_RE.finditer(raw)
+        WordItem(m.group(0), simple_lemma(m.group(0)), pos="")
+        for m in TOKEN_RE.finditer(raw)
+        if not should_skip_token(m.group(0), raw)
     )
 
 
@@ -37,6 +41,8 @@ def extract_from_text(text: str) -> list[WordItem]:
             sent_text = sent.text.strip()
             for token in sent:
                 if not token.text or not TOKEN_RE.fullmatch(token.text):
+                    continue
+                if should_skip_token(token.text, sent_text):
                     continue
                 if getattr(token, "is_stop", False):
                     continue
@@ -59,6 +65,8 @@ def _regex_extract_from_text(text: str) -> list[WordItem]:
     for sent in sentences:
         for m in TOKEN_RE.finditer(sent):
             surface = m.group(0)
+            if should_skip_token(surface, sent):
+                continue
             lemma = simple_lemma(surface)
             if len(lemma) <= 1 or lemma in BASIC_STOPWORDS:
                 continue
@@ -74,6 +82,21 @@ def looks_like_proper(surface: str, sentence: str) -> bool:
     if any(ch.isupper() for ch in surface[1:]):
         return True
     if surface[:1].isupper() and not sentence.lstrip().startswith(surface):
+        return True
+    return False
+
+
+def should_skip_token(surface: str, context: str = "") -> bool:
+    """Drop OCR/page-code fragments that are not useful vocabulary targets."""
+    text = surface.strip()
+    if len(text) <= 1:
+        return True
+    lowered = text.lower()
+    if lowered not in ROMAN_WORD_EXCEPTIONS and ROMAN_NUMERAL_RE.fullmatch(lowered):
+        return True
+    if text.isupper() and len(text) <= 3:
+        return True
+    if lowered in {"contents", "chapter", "section", "page", "fig", "figure", "table"}:
         return True
     return False
 
@@ -113,7 +136,7 @@ def dedupe_keep_first(items: Iterable[WordItem]) -> list[WordItem]:
     seen = set()
     out: list[WordItem] = []
     for item in items:
-        if len(item.lemma) <= 1:
+        if len(item.lemma) <= 1 or should_skip_token(item.surface, item.sentence):
             continue
         key = item.lemma.lower()
         if key in seen:
