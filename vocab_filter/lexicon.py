@@ -59,9 +59,6 @@ class CefrPyLexicon(BaseLexicon):
         if not word:
             return None
 
-    def get_meaning(self, word: str) -> str:
-        return ""
-
         # Prefer POS-specific lookup when spaCy provided a Penn Treebank tag.
         if pos:
             try:
@@ -78,6 +75,9 @@ class CefrPyLexicon(BaseLexicon):
             return _coerce_cefr(level)
         except Exception:
             return None
+
+    def get_meaning(self, word: str) -> str:
+        return ""
 
 
 def _coerce_cefr(value: object) -> Optional[str]:

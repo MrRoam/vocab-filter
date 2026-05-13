@@ -19,7 +19,7 @@ class WordItem:
 
 def extract_from_words(raw: str) -> list[WordItem]:
     return dedupe_keep_first(
-        WordItem(m.group(0), simple_lemma(m.group(0)), pos="")
+        WordItem(m.group(0), normalize_word(m.group(0)), pos="")
         for m in TOKEN_RE.finditer(raw)
         if not should_skip_token(m.group(0), raw)
     )
@@ -47,6 +47,8 @@ def extract_from_text(text: str) -> list[WordItem]:
                 if getattr(token, "is_stop", False):
                     continue
                 lemma = token.lemma_.lower().strip() if token.lemma_ and token.lemma_ != "-PRON-" else simple_lemma(token.text)
+                if lemma == token.text.lower().strip():
+                    lemma = simple_lemma(token.text)
                 if len(lemma) <= 1:
                     continue
                 ent = getattr(token, "ent_type_", "")
@@ -117,19 +119,31 @@ def simple_lemma(word: str) -> str:
         base = w[:-3]
         if len(base) > 2 and base[-1] == base[-2]:
             base = base[:-1]
+        if base.endswith(("at", "iz")):
+            return base + "e"
         return base
     if len(w) > 4 and w.endswith("ed"):
         base = w[:-2]
         if len(base) > 2 and base[-1] == base[-2]:
             base = base[:-1]
+        if w.endswith("ied") and len(w) > 4:
+            return w[:-3] + "y"
+        if w.endswith("ated") and len(w) > 6:
+            return base + "e"
         # Conservative repair for verbs like released -> release,
         # derived -> derive, argued -> argue, balanced -> balance.
         if base.endswith(("s", "v", "u", "c", "g")) and not base.endswith("ss"):
             return base + "e"
         return base
+    if len(w) > 5 and w.endswith(("ches", "shes", "xes", "zes", "sses")):
+        return w[:-2]
     if len(w) > 4 and w.endswith("s") and not w.endswith(("ss", "us", "ous", "is", "ics")):
         return w[:-1]
     return w
+
+
+def normalize_word(word: str) -> str:
+    return word.lower().strip("'")
 
 
 def dedupe_keep_first(items: Iterable[WordItem]) -> list[WordItem]:

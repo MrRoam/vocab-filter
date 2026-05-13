@@ -22,10 +22,12 @@ class AnalysisResult:
     likely_unknown: list[dict]
     borderline: list[dict]
     likely_known: list[dict]
+    ungraded: list[dict]
     proper_nouns: list[dict]
     summary: dict
     likely_unknown_md: str
     borderline_md: str
+    ungraded_md: str
 
 
 def detect_input_mode(content: str) -> InputMode:
@@ -80,12 +82,17 @@ def analyze_content(
 
         cefr = lexicon.get(item.lemma, item.pos)
         meaning_zh = lexicon.get_meaning(item.lemma) or get_meaning(item.lemma)
+        is_forced_known = item.lemma in known_words
+        is_forced_unknown = item.lemma in unknown_words
         result = score_word(item.lemma, cefr, level, known_words, unknown_words)
+        label = result.label
+        if not cefr and not is_forced_known and not is_forced_unknown:
+            label = "ungraded"
         rows.append({
             "word": item.surface,
             "lemma": item.lemma,
             "pos": item.pos,
-            "label": result.label,
+            "label": label,
             "score": result.score,
             "cefr": result.cefr or "",
             "meaning_zh": meaning_zh,
@@ -98,6 +105,7 @@ def analyze_content(
     likely_unknown = [r for r in rows_sorted if r["label"] == "likely_unknown"]
     borderline = [r for r in rows_sorted if r["label"] == "borderline"]
     likely_known = [r for r in rows_sorted if r["label"] == "likely_known"]
+    ungraded = [r for r in rows_sorted if r["label"] == "ungraded"]
     counts = Counter(r["label"] for r in rows)
     cefr_counts = Counter((r.get("cefr") or "unknown") for r in rows)
 
@@ -111,6 +119,7 @@ def analyze_content(
         "likely_unknown": counts.get("likely_unknown", 0),
         "borderline": counts.get("borderline", 0),
         "likely_known": counts.get("likely_known", 0),
+        "ungraded": counts.get("ungraded", 0),
         "cefr_counts": dict(cefr_counts),
     }
 
@@ -119,10 +128,12 @@ def analyze_content(
         likely_unknown=likely_unknown,
         borderline=borderline,
         likely_known=likely_known,
+        ungraded=ungraded,
         proper_nouns=proper_rows,
         summary=summary,
-        likely_unknown_md=rows_to_markdown(likely_unknown, "建议学习词汇"),
-        borderline_md=rows_to_markdown(borderline, "待确认词汇"),
+        likely_unknown_md=rows_to_markdown(likely_unknown, "待学习词汇"),
+        borderline_md=rows_to_markdown(borderline, "可选复习词汇"),
+        ungraded_md=rows_to_markdown(ungraded, "词库未收录词"),
     )
 
 
@@ -132,6 +143,8 @@ def write_analysis_outputs(result: AnalysisResult, out_dir: str | Path) -> None:
     write_rows(out / "likely_unknown.csv", result.likely_unknown)
     write_rows(out / "borderline.csv", result.borderline)
     write_rows(out / "likely_known.csv", result.likely_known)
+    write_rows(out / "ungraded.csv", result.ungraded)
     write_rows(out / "proper_nouns.csv", result.proper_nouns)
     (out / "likely_unknown.md").write_text(result.likely_unknown_md, encoding="utf-8")
     (out / "borderline.md").write_text(result.borderline_md, encoding="utf-8")
+    (out / "ungraded.md").write_text(result.ungraded_md, encoding="utf-8")

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import re
+from pathlib import Path
 
 import streamlit as st
 
@@ -10,7 +12,7 @@ from vocab_filter.export_md import rows_to_markdown
 from vocab_filter.level_mapping import CEFR_OPTIONS, score_to_cefr
 from vocab_filter.pipeline import analyze_content
 from vocab_filter.placement import estimate_level, sample_test_words
-from vocab_filter.preprocess import should_skip_token, simple_lemma
+from vocab_filter.preprocess import normalize_word, should_skip_token, simple_lemma
 
 try:
     import pandas as pd  # type: ignore
@@ -27,15 +29,25 @@ st.set_page_config(
 
 
 RESULT_LABELS = {
-    "target": "建议学习词汇",
-    "review": "待确认词汇",
-    "known": "暂不处理词汇",
+    "target": "待学习词汇",
+    "review": "可选复习词汇",
+    "known": "已掌握/低优先级词汇",
+    "ungraded": "词库未收录词",
     "proper": "专有名词",
     "all": "全部分析结果",
+}
+EXPORT_DETAIL_OPTIONS = ["仅单词", "单词 + 翻译", "完整字段"]
+CATEGORY_HELP = {
+    "target": "明显高于当前水平、或来自你的生词表，优先学习。",
+    "review": "接近当前水平边界，可能认识但不稳，可按需要复习。",
+    "known": "按当前水平、常见度或已掌握词表判断，暂时不用优先处理。",
+    "ungraded": "CEFR 词库没有收录的词，常见于术语、派生词或作者造词，建议单独人工判断。",
+    "proper": "人名、地名、机构名等，默认不进入背词清单。",
 }
 
 PLACEMENT_WORDS_PER_LEVEL = 5
 WORD_RE = re.compile(r"[A-Za-z]+(?:[-'][A-Za-z]+)?")
+PROFILE_PATH = Path("data/user_profile.json")
 
 
 def apply_style() -> None:
@@ -858,6 +870,23 @@ div[data-testid="stButton"]:has(button[kind="primary"]) > button {
   margin-top: 1.35rem;
   border-top-color: var(--vf-line);
 }
+.vf-export-action-label {
+  min-height: 1.5rem;
+  margin-bottom: .35rem;
+  color: var(--vf-text);
+  font-size: .9rem;
+  font-weight: 640;
+}
+.vf-side-panel {
+  padding: 1rem;
+  border: 1px solid var(--vf-line);
+  border-radius: 22px;
+  background: var(--vf-surface);
+  box-shadow: var(--vf-shadow-soft);
+}
+[data-testid="stDataFrame"] {
+  font-size: 1.02rem;
+}
 div[data-testid="stMetric"] {
   border-radius: 16px;
   background: var(--vf-surface-soft);
@@ -1094,8 +1123,37 @@ div[role="dialog"] div[data-testid="stRadio"] label:has(input[type="radio"]:chec
     )
 
 
+def load_user_profile() -> dict:
+    if not PROFILE_PATH.exists():
+        return {}
+    try:
+        return json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_user_profile() -> None:
+    profile = {
+        "level_source": st.session_state.get("level_source"),
+        "exam_type": st.session_state.get("exam_type"),
+        "exam_score": st.session_state.get("exam_score"),
+        "measured_level": st.session_state.get("measured_level"),
+        "manual_cefr": st.session_state.get("manual_cefr"),
+    }
+    PROFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    PROFILE_PATH.write_text(json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def init_state() -> None:
-    st.session_state.setdefault("theme_mode", "深色")
+    if not st.session_state.get("_profile_loaded"):
+        profile = load_user_profile()
+        for key in ["level_source", "exam_type", "exam_score", "measured_level", "manual_cefr"]:
+            value = profile.get(key)
+            if value is not None and key not in st.session_state:
+                st.session_state[key] = value
+        st.session_state["_profile_loaded"] = True
+
+    st.session_state.theme_mode = "深色"
     st.session_state.setdefault("level_source", None)
     st.session_state.setdefault("exam_type", "CET-6 六级")
     st.session_state.setdefault("exam_score", None)
@@ -1106,6 +1164,13 @@ def init_state() -> None:
     st.session_state.setdefault("known_extra_words", set())
     st.session_state.setdefault("settings_menu_section", "常规")
     st.session_state.setdefault("level_settings_show_placement", False)
+    st.session_state.setdefault("draft_exam_type", st.session_state.get("exam_type", "CET-6 六级"))
+    if "draft_exam_score" not in st.session_state:
+        st.session_state.draft_exam_score = (
+            st.session_state.exam_score
+            if st.session_state.get("exam_score") is not None
+            else default_exam_score(st.session_state.draft_exam_type)
+        )
 
 
 def default_exam_score(exam: str) -> float | int:
@@ -1173,9 +1238,12 @@ def parse_personal_words(uploaded_file) -> set[str]:
             continue
         for match in WORD_RE.finditer(clean):
             surface = match.group(0)
+            word = normalize_word(surface)
             lemma = simple_lemma(surface)
-            if lemma and not should_skip_token(surface, clean):
-                words.add(lemma.lower())
+            if word and not should_skip_token(surface, clean):
+                words.add(word)
+                if lemma:
+                    words.add(lemma)
     return words
 
 
@@ -1191,16 +1259,19 @@ def rows_to_csv_bytes(rows: list[dict]) -> bytes:
     return output.getvalue().encode("utf-8-sig")
 
 
-def compact_rows(rows: list[dict], include_score: bool = False) -> list[dict]:
+def compact_rows(rows: list[dict], include_score: bool = False, include_surface: bool = True) -> list[dict]:
     compact: list[dict] = []
     for row in rows:
+        word = row.get("lemma") or row.get("word") or ""
+        surface = row.get("word") or ""
         item = {
-            "词汇": row.get("lemma") or row.get("word") or "",
-            "原文形式": row.get("word") or "",
+            "词汇": word,
             "CEFR": row.get("cefr") or "未知",
             "中文释义": row.get("meaning_zh") or "暂无释义",
             "原文句子": row.get("sentence") or "",
         }
+        if include_surface and surface and surface != word:
+            item = {"词汇": word, "原文形式": surface, **{k: v for k, v in item.items() if k != "词汇"}}
         if include_score:
             item["评分"] = row.get("score", "")
         compact.append(item)
@@ -1217,10 +1288,18 @@ def proper_rows(rows: list[dict]) -> list[dict]:
     ]
 
 
-def show_table(rows: list[dict], height: int = 430) -> None:
+def show_table(rows: list[dict], height: int | None = None) -> None:
     if pd is None:
         st.write(rows)
         return
+
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        for column in ["原文句子", "原文形式"]:
+            if column in df.columns and df[column].fillna("").astype(str).str.strip().eq("").all():
+                df = df.drop(columns=[column])
+    if height is None:
+        height = min(520, max(190, 44 + 35 * max(1, len(df))))
 
     column_config = {
         "词汇": st.column_config.TextColumn("词汇", width="small"),
@@ -1231,7 +1310,7 @@ def show_table(rows: list[dict], height: int = 430) -> None:
         "原文句子": st.column_config.TextColumn("原文句子", width="large"),
     }
     st.dataframe(
-        pd.DataFrame(rows),
+        df,
         use_container_width=True,
         height=height,
         hide_index=True,
@@ -1246,22 +1325,92 @@ def get_export_rows(result, scope: str) -> list[dict]:
         return result.borderline
     if scope == RESULT_LABELS["known"]:
         return result.likely_known
+    if scope == RESULT_LABELS["ungraded"]:
+        return result.ungraded
     if scope == RESULT_LABELS["proper"]:
         return result.proper_nouns
     return result.all_rows
 
 
-def get_export_bytes(rows: list[dict], scope: str, fmt: str) -> tuple[bytes, str, str]:
+def export_word(row: dict) -> str:
+    return row.get("word") or row.get("lemma") or ""
+
+
+def simple_export_rows(rows: list[dict], detail: str) -> list[dict]:
+    if detail == "完整字段":
+        return rows
+    simple: list[dict] = []
+    for row in rows:
+        item = {"单词": export_word(row)}
+        if detail == "单词 + 翻译":
+            item["中文释义"] = row.get("meaning_zh") or ""
+        simple.append(item)
+    return simple
+
+
+def rows_to_simple_markdown(rows: list[dict], title: str, detail: str) -> str:
+    lines = [f"# {title}", ""]
+    if not rows:
+        lines.append("未发现符合条件的词汇。")
+        return "\n".join(lines)
+    for row in rows:
+        word = export_word(row)
+        if not word:
+            continue
+        meaning = (row.get("meaning_zh") or "").strip()
+        if detail == "单词 + 翻译" and meaning:
+            lines.append(f"- {word}：{meaning}")
+        else:
+            lines.append(f"- {word}")
+    return "\n".join(lines)
+
+
+def get_export_bytes(rows: list[dict], scope: str, fmt: str, detail: str) -> tuple[bytes, str, str]:
     slug = {
         RESULT_LABELS["target"]: "target_vocabulary",
         RESULT_LABELS["review"]: "review_candidates",
         RESULT_LABELS["known"]: "excluded_vocabulary",
+        RESULT_LABELS["ungraded"]: "ungraded_vocabulary",
         RESULT_LABELS["proper"]: "named_entities",
         RESULT_LABELS["all"]: "all_results",
     }[scope]
+    export_rows = simple_export_rows(rows, detail)
     if fmt == "Markdown (.md)":
-        return rows_to_markdown(rows, scope).encode("utf-8"), f"{slug}.md", "text/markdown"
-    return rows_to_csv_bytes(rows), f"{slug}.csv", "text/csv"
+        markdown = rows_to_markdown(rows, scope) if detail == "完整字段" else rows_to_simple_markdown(rows, scope, detail)
+        return markdown.encode("utf-8"), f"{slug}.md", "text/markdown"
+    return rows_to_csv_bytes(export_rows), f"{slug}.csv", "text/csv"
+
+
+def coerce_exam_score(exam: str, raw_score) -> float | int:
+    fallback = default_exam_score(exam)
+    try:
+        score = float(raw_score)
+    except (TypeError, ValueError):
+        score = float(fallback)
+    if exam == "IELTS 雅思":
+        return min(9.0, max(0.0, float(score)))
+    if exam == "TOEFL iBT 托福":
+        return min(120, max(0, int(round(score))))
+    if exam == "Duolingo English Test":
+        return min(160, max(10, int(round(score))))
+    if exam == "高考英语":
+        return min(150, max(0, int(round(score))))
+    return min(710, max(0, int(round(score))))
+
+
+def render_exam_score_input(exam: str, *, key: str) -> float:
+    st.session_state[key] = coerce_exam_score(exam, st.session_state.get(key, default_exam_score(exam)))
+    if exam == "IELTS 雅思":
+        st.number_input("成绩", min_value=0.0, max_value=9.0, step=0.5, format="%.1f", key=key)
+    elif exam == "TOEFL iBT 托福":
+        st.number_input("成绩", min_value=0, max_value=120, step=1, format="%d", key=key)
+    elif exam == "Duolingo English Test":
+        st.number_input("成绩", min_value=10, max_value=160, step=5, format="%d", key=key)
+    elif exam == "高考英语":
+        st.number_input("成绩", min_value=0, max_value=150, step=1, format="%d", key=key)
+    else:
+        st.number_input("成绩", min_value=0, max_value=710, step=1, format="%d", key=key)
+    return float(st.session_state[key])
 
 
 def render_level_settings() -> None:
@@ -1294,21 +1443,8 @@ def render_level_settings() -> None:
             saved_score = st.session_state.get("exam_score") if st.session_state.get("exam_type") == exam else None
             st.session_state.draft_exam_score = saved_score if saved_score is not None else default_exam_score(exam)
             st.session_state._draft_exam_score_for = exam
-        if exam == "IELTS 雅思":
-            st.session_state.draft_exam_score = float(st.session_state.draft_exam_score)
-        else:
-            st.session_state.draft_exam_score = int(round(float(st.session_state.draft_exam_score)))
-        if exam == "IELTS 雅思":
-            st.number_input("成绩", min_value=0.0, max_value=9.0, step=0.5, format="%.1f", key="draft_exam_score")
-        elif exam == "TOEFL iBT 托福":
-            st.number_input("成绩", min_value=0, max_value=120, step=1, format="%d", key="draft_exam_score")
-        elif exam == "Duolingo English Test":
-            st.number_input("成绩", min_value=10, max_value=160, step=5, format="%d", key="draft_exam_score")
-        elif exam == "高考英语":
-            st.number_input("成绩", min_value=0, max_value=150, step=1, format="%d", key="draft_exam_score")
-        else:
-            st.number_input("成绩", min_value=0, max_value=710, step=1, format="%d", key="draft_exam_score")
-        estimate = score_to_cefr(exam, float(st.session_state.draft_exam_score))
+        score = render_exam_score_input(exam, key="draft_exam_score")
+        estimate = score_to_cefr(exam, score)
         st.markdown(
             f'<div class="vf-setting-summary"><span class="vf-level-pill">换算结果 <strong>{estimate.level}</strong></span></div>',
             unsafe_allow_html=True,
@@ -1318,6 +1454,7 @@ def render_level_settings() -> None:
             st.session_state.exam_score = st.session_state.draft_exam_score
             st.session_state.level_source = "考试成绩换算"
             st.session_state.placement_notice = f"已按 {exam} {st.session_state.draft_exam_score:g} 应用：{estimate.level}。"
+            save_user_profile()
             st.rerun()
 
     elif level_source == "快速测评结果":
@@ -1331,6 +1468,7 @@ def render_level_settings() -> None:
             if st.button("使用测评结果", type="primary", use_container_width=True, key="apply_measured_level"):
                 st.session_state.level_source = "快速测评结果"
                 st.session_state.placement_notice = f"已应用测评结果：{st.session_state.measured_level}。"
+                save_user_profile()
                 st.rerun()
 
     elif level_source == "手动选择 CEFR":
@@ -1345,6 +1483,7 @@ def render_level_settings() -> None:
             st.session_state.manual_cefr = st.session_state.manual_cefr_choice
             st.session_state.level_source = "手动选择 CEFR"
             st.session_state.placement_notice = f"已应用手动等级：{st.session_state.manual_cefr}。"
+            save_user_profile()
             st.rerun()
 
 
@@ -1367,6 +1506,7 @@ def open_dialog(title: str, renderer, *, width: str = "large") -> bool:
     if dialog is None:
         return False
 
+    st.session_state["_dialog_opened_this_run"] = True
     try:
         decorator = dialog(title, width=width)
     except TypeError:
@@ -1382,13 +1522,7 @@ def open_dialog(title: str, renderer, *, width: str = "large") -> bool:
 
 def render_general_settings() -> None:
     st.markdown('<div class="vf-section-label">GENERAL</div>', unsafe_allow_html=True)
-    current_theme = st.session_state.get("theme_mode", "深色")
-    if "settings_theme_choice" not in st.session_state:
-        st.session_state.settings_theme_choice = current_theme
-    chosen_theme = st.radio("界面色调", ["浅色", "深色"], horizontal=True, key="settings_theme_choice")
-    if chosen_theme != current_theme:
-        st.session_state.theme_mode = chosen_theme
-        st.rerun()
+    st.caption("界面已固定为深色模式。")
     render_personalization_settings()
 
 
@@ -1414,8 +1548,94 @@ def render_topbar(user_level: str | None) -> None:
     st.markdown('<div class="vf-top-rule"></div>', unsafe_allow_html=True)
 
 
+def render_level_picker(user_level: str | None, level_note: str) -> None:
+    st.markdown('<div class="vf-side-panel">', unsafe_allow_html=True)
+    st.markdown('<div class="vf-section-label">LEVEL</div>', unsafe_allow_html=True)
+    if user_level:
+        st.markdown(
+            f'<div class="vf-setting-summary"><span class="vf-level-pill">当前 <strong>{user_level}</strong></span></div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(level_note)
+    else:
+        st.info("先选择一个英语水平；不想测评也可以直接按考试成绩或 CEFR 等级设置。")
+
+    level_options = ["手动选择 CEFR", "考试成绩换算", "快速测评结果"]
+    current_source = st.session_state.get("level_source")
+    if "analysis_level_source_choice" not in st.session_state:
+        st.session_state.analysis_level_source_choice = current_source if current_source in level_options else "手动选择 CEFR"
+    level_source = st.radio(
+        "确定方式",
+        level_options,
+        key="analysis_level_source_choice",
+        horizontal=False,
+    )
+
+    if level_source == "手动选择 CEFR":
+        selected = st.session_state.get("manual_cefr") or user_level or "B1"
+        st.selectbox(
+            "CEFR 等级",
+            CEFR_OPTIONS,
+            index=CEFR_OPTIONS.index(selected) if selected in CEFR_OPTIONS else 2,
+            key="analysis_manual_cefr_choice",
+        )
+        if st.button("应用水平", type="primary", use_container_width=True, key="analysis_apply_manual_level"):
+            st.session_state.manual_cefr = st.session_state.analysis_manual_cefr_choice
+            st.session_state.level_source = "手动选择 CEFR"
+            st.session_state.placement_notice = f"已应用手动等级：{st.session_state.manual_cefr}。"
+            save_user_profile()
+            st.rerun()
+
+    elif level_source == "考试成绩换算":
+        exam_options = ["CET-4 四级", "CET-6 六级", "IELTS 雅思", "TOEFL iBT 托福", "Duolingo English Test", "高考英语"]
+        current_exam = st.session_state.get("analysis_exam_type") or st.session_state.get("exam_type", "CET-6 六级")
+        exam = st.selectbox(
+            "考试类型",
+            exam_options,
+            index=exam_options.index(current_exam) if current_exam in exam_options else 1,
+            key="analysis_exam_type",
+        )
+        if st.session_state.get("_analysis_exam_score_for") != exam:
+            saved_score = st.session_state.get("exam_score") if st.session_state.get("exam_type") == exam else None
+            st.session_state.analysis_exam_score = saved_score if saved_score is not None else default_exam_score(exam)
+            st.session_state._analysis_exam_score_for = exam
+        score = render_exam_score_input(exam, key="analysis_exam_score")
+        estimate = score_to_cefr(exam, score)
+        st.markdown(
+            f'<div class="vf-setting-summary"><span class="vf-level-pill">换算 <strong>{estimate.level}</strong></span></div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(estimate.note)
+        if st.button("应用水平", type="primary", use_container_width=True, key="analysis_apply_exam_level"):
+            st.session_state.exam_type = exam
+            st.session_state.exam_score = st.session_state.analysis_exam_score
+            st.session_state.level_source = "考试成绩换算"
+            st.session_state.placement_notice = f"已按 {exam} {st.session_state.analysis_exam_score:g} 应用：{estimate.level}。"
+            save_user_profile()
+            st.rerun()
+
+    else:
+        measured = st.session_state.get("measured_level")
+        if measured:
+            st.markdown(
+                f'<div class="vf-setting-summary"><span class="vf-level-pill">测评结果 <strong>{measured}</strong></span></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("应用测评结果", type="primary", use_container_width=True, key="analysis_apply_measured_level"):
+                st.session_state.level_source = "快速测评结果"
+                st.session_state.placement_notice = f"已应用测评结果：{measured}。"
+                save_user_profile()
+                st.rerun()
+        if st.button("开始快速测评", use_container_width=True, key="analysis_start_placement"):
+            if not open_dialog("英语水平测评", render_placement_settings):
+                st.session_state.placement_inline_open = True
+                st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 def render_analysis(
     user_level: str | None,
+    level_note: str,
     backend: str,
     default_cefr_path: str,
     known_extra: set[str],
@@ -1425,33 +1645,41 @@ def render_analysis(
 <div class="vf-workspace-heading">
   <div class="vf-workspace-kicker"><strong>VF</strong><span>Level-aware vocabulary filter</span></div>
   <h2>筛出值得学的词</h2>
-  <p>上传或粘贴英文材料。</p>
+  <p>上传文件或直接粘贴文章，右侧选择英语水平后开始分析。</p>
 </div>
         """,
         unsafe_allow_html=True,
     )
-    uploaded = st.file_uploader(
-        "文件",
-        type=["txt", "md", "csv"],
-        accept_multiple_files=False,
-        key="analysis_upload",
-        label_visibility="collapsed",
-    )
-    pasted_text = st.text_area(
-        "文本",
-        height=210,
-        placeholder="Paste an article, notes, or a word list...",
-        key="analysis_text",
-        label_visibility="collapsed",
-    )
-    analyze_btn = st.button("分析", type="primary", use_container_width=True, key="analyze_button")
+    if st.session_state.placement_notice:
+        st.success(st.session_state.placement_notice)
+        st.session_state.placement_notice = ""
+
+    input_col, level_col = st.columns([2.15, 1], gap="large")
+    with input_col:
+        st.markdown('<div class="vf-analysis-shell">', unsafe_allow_html=True)
+        st.markdown('<div class="vf-section-label">INPUT</div>', unsafe_allow_html=True)
+        uploaded = st.file_uploader(
+            "上传文件或粘贴文章",
+            type=["txt", "md", "csv"],
+            accept_multiple_files=False,
+            key="analysis_upload",
+            help="支持 txt、md、csv；如果同时上传文件和粘贴文本，会优先分析上传文件。",
+        )
+        pasted_text = st.text_area(
+            "粘贴文章或词汇表",
+            height=230,
+            placeholder="Paste an article, notes, or a word list...",
+            key="analysis_text",
+        )
+        analyze_label = "重新分析" if st.session_state.get("last_result") else "分析"
+        analyze_btn = st.button(analyze_label, type="primary", use_container_width=True, key="analyze_button")
+        st.markdown("</div>", unsafe_allow_html=True)
+    with level_col:
+        render_level_picker(user_level, level_note)
 
     if analyze_btn:
         if user_level is None:
-            st.warning("请先完成测评或选择英语水平，再开始分析。")
-            if not open_dialog("英语水平测评", render_placement_settings):
-                st.session_state.placement_inline_open = True
-                st.rerun()
+            st.warning("请先在右侧选择英语水平，再开始分析。可以跳过测评，直接用考试成绩或 CEFR 等级。")
         elif uploaded is None and not pasted_text.strip():
             st.warning("请上传文件或粘贴文本。")
         else:
@@ -1468,6 +1696,7 @@ def render_analysis(
                 )
 
             st.session_state["last_result"] = result
+            st.session_state["last_analysis_level"] = user_level
             st.success("分析完成")
 
     result = st.session_state.get("last_result")
@@ -1475,31 +1704,52 @@ def render_analysis(
         return
 
     s = result.summary
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("建议学习词汇", s["likely_unknown"])
-    c2.metric("待确认词汇", s["borderline"])
-    c3.metric("暂不处理词汇", s["likely_known"])
-    c4.metric("专有名词", s["proper_nouns"])
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric(RESULT_LABELS["target"], s["likely_unknown"])
+    c2.metric(RESULT_LABELS["review"], s["borderline"])
+    c3.metric(RESULT_LABELS["known"], s["likely_known"])
+    c4.metric(RESULT_LABELS["ungraded"], s["ungraded"])
+    c5.metric("专有名词", s["proper_nouns"])
 
-    out1, out2, out3, out4 = st.tabs(["建议学习词汇", "待确认词汇", "暂不处理词汇", "专有名词"])
+    if st.session_state.get("last_analysis_level") and st.session_state.get("last_analysis_level") != user_level:
+        st.info("英语水平已切换，点击上方“重新分析”可按新水平刷新结果。")
+
+    out1, out2, out3, out4, out5 = st.tabs([
+        RESULT_LABELS["target"],
+        RESULT_LABELS["review"],
+        RESULT_LABELS["known"],
+        RESULT_LABELS["ungraded"],
+        "专有名词",
+    ])
+    show_surface = s.get("input_mode") != "words"
     with out1:
-        show_table(compact_rows(result.likely_unknown))
+        st.caption(CATEGORY_HELP["target"])
+        show_table(compact_rows(result.likely_unknown, include_surface=show_surface))
     with out2:
-        show_table(compact_rows(result.borderline))
+        st.caption(CATEGORY_HELP["review"])
+        show_table(compact_rows(result.borderline, include_surface=show_surface))
     with out3:
-        show_table(compact_rows(result.likely_known), height=330)
+        st.caption(CATEGORY_HELP["known"])
+        show_table(compact_rows(result.likely_known, include_surface=show_surface), height=330)
     with out4:
+        st.caption(CATEGORY_HELP["ungraded"])
+        show_table(compact_rows(result.ungraded, include_surface=show_surface), height=330)
+    with out5:
+        st.caption(CATEGORY_HELP["proper"])
         show_table(proper_rows(result.proper_nouns), height=330)
 
     st.markdown('<div class="vf-export">', unsafe_allow_html=True)
-    ec1, ec2, ec3 = st.columns([1, 1, 1])
+    ec1, ec2, ec3, ec4 = st.columns([1, 1, 1, 1])
     with ec1:
         export_scope = st.selectbox("导出范围", list(RESULT_LABELS.values()))
     with ec2:
+        export_detail = st.selectbox("导出内容", EXPORT_DETAIL_OPTIONS)
+    with ec3:
         export_fmt = st.selectbox("导出格式", ["Markdown (.md)", "CSV (.csv)"])
     export_rows = get_export_rows(result, export_scope)
-    data, filename, mime = get_export_bytes(export_rows, export_scope, export_fmt)
-    with ec3:
+    data, filename, mime = get_export_bytes(export_rows, export_scope, export_fmt, export_detail)
+    with ec4:
+        st.markdown('<div class="vf-export-action-label">导出操作</div>', unsafe_allow_html=True)
         st.download_button("导出", data, file_name=filename, mime=mime, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1550,6 +1800,7 @@ def render_placement_settings(*, show_heading: bool = True) -> None:
         st.session_state.placement_rates = est["rates"]
         st.session_state.placement_inline_open = False
         st.session_state.level_settings_show_placement = False
+        save_user_profile()
         st.rerun()
 
     if st.session_state.get("placement_rates"):
@@ -1566,7 +1817,7 @@ def render_help_settings() -> None:
 自动模式优先使用 cefrpy，必要时回退到项目 CSV。
 
 ### 个性化
-上传“已掌握词”可从建议学习词汇中排除。
+上传“已掌握词”可从待学习词汇中排除。
         """
     )
 
@@ -1611,16 +1862,13 @@ def render_inline_dialog_fallback() -> None:
 
 init_state()
 apply_style()
+st.session_state["_dialog_opened_this_run"] = False
 
-user_level, level_mode, _ = current_level_from_state()
+user_level, level_mode, level_note = current_level_from_state()
 backend, default_cefr_path = cefr_runtime_settings()
 known_extra = st.session_state.get("known_extra_words", set())
 
 render_topbar(user_level)
 render_inline_dialog_fallback()
 
-if user_level is None and not st.session_state.get("placement_inline_open") and not st.session_state.get("settings_inline_open"):
-    if not open_dialog("英语水平测评", render_placement_settings):
-        st.session_state.placement_inline_open = True
-
-render_analysis(user_level, backend, default_cefr_path, known_extra)
+render_analysis(user_level, level_note, backend, default_cefr_path, known_extra)

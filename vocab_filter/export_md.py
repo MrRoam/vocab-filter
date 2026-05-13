@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Iterable
 
 
-def rows_to_markdown(rows: Iterable[dict], title: str = "建议学习词汇") -> str:
+def rows_to_markdown(rows: Iterable[dict], title: str = "待学习词汇") -> str:
     rows = list(rows)
     lines: list[str] = []
     lines.append(f"# {title}")
