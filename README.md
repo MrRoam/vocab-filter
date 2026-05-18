@@ -1,68 +1,89 @@
 # vocab-filter
 
-一个**规则主导**的个人英语词汇过滤器。
+一个规则主导的个人英语词汇过滤器。
 
-目标：
+它会从英文文章、Markdown 笔记、CSV 或词表里提取词汇，再结合你的 CEFR 水平、词频、CEFR 词库和个人已掌握词表，把词分成更适合学习、复习、跳过或人工判断的几类。
 
-> 上传英文文章、Markdown 笔记、CSV 或词表；  
-> 根据考试成绩 / 快速测评 / CEFR 等级确定你的筛词水平；  
-> 结合 CEFR、词频和个人词库，输出更值得优先处理的词汇。
+核心判断由本地规则完成，不让 AI 猜“你认不认识这个词”。
 
-核心判断由规则完成，不让 AI 猜“你认不认识这个词”。
+---
+
+## 当前状态
+
+- 默认安装已经轻量化：`pip install -e ".[ui]"` 只安装 `streamlit` 和 `pandas`。
+- `spacy`、`wordfreq`、`cefrpy` 都是可选增强依赖，不再随 UI 默认安装。
+- 不装增强依赖也能运行，只是分词、词频、CEFR 覆盖会更粗。
+- UI 当前支持上传/粘贴文本、快速测评、考试成绩换算、手动 CEFR、已掌握词上传、结果导出。
+- CLI 支持文章文件和词表文件输入，适合批处理或最小环境验证。
 
 ---
 
 ## 安装
 
-项目的核心逻辑不强依赖大型第三方库。新电脑上如果只是想先跑起来，建议从轻量方式开始。
+建议在虚拟环境里安装。Windows PowerShell 示例：
 
-### 方式一：命令行最小版
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+```
 
-只安装项目本身，不安装 UI 和增强词库：
+### 最小命令行版
+
+只安装项目本身，下载最少：
 
 ```bash
 pip install -e .
 ```
 
-运行示例：
+验证：
 
 ```bash
 python -m vocab_filter.cli --text examples/article.txt --level B2 --backend csv --out output
 ```
 
-这个方式下载最少，适合先验证项目是否可用。
+### 轻量 UI 版
 
-### 方式二：轻量 UI 版
-
-只安装 UI 必需依赖：
+安装 UI 必需依赖：
 
 ```bash
 pip install -e ".[ui]"
 ```
 
-如果不想安装 spaCy，可以在当前 PowerShell 里启用轻量分词：
+启动：
+
+```bash
+streamlit run app.py
+```
+
+如果不想让程序尝试导入 spaCy，可以在当前 PowerShell 里启用轻量分词：
 
 ```powershell
 $env:VOCAB_FILTER_NO_SPACY="1"
 streamlit run app.py
 ```
 
-轻量 UI 可以正常打开和分析，但会使用项目内置的简化逻辑：
+轻量 UI 的代价：
 
 - 不装 `spacy`：使用正则分词和简单词形还原，专有名词识别会粗一些。
 - 不装 `wordfreq`：使用内置粗略词频表，词频判断不如完整库细。
-- 不装 `cefrpy`：使用项目自带 `data/cefr_seed.csv` 或你上传的 CEFR CSV，词库覆盖更小。
+- 不装 `cefrpy`：使用项目自带 `data/cefr_seed.csv`，CEFR 覆盖更小。
 
-### 方式三：完整 UI 版
+### 完整增强版
 
-如果想要更好的分词、词形还原、词频和 CEFR 覆盖，再安装完整增强依赖：
+需要更好的分词、词形还原、词频和 CEFR 覆盖时再安装：
 
 ```bash
 pip install -e ".[full]"
 python -m spacy download en_core_web_sm
 ```
 
-这个命令会安装 `streamlit`、`pandas`、`spacy`、`wordfreq`、`cefrpy` 以及它们的间接依赖，所以首次下载会比较多。这不是运行项目的硬性要求，而是完整体验所需。
+也可以只给 CLI 增强 NLP 能力：
+
+```bash
+pip install -e ".[nlp]"
+python -m spacy download en_core_web_sm
+```
 
 ---
 
@@ -72,93 +93,90 @@ python -m spacy download en_core_web_sm
 streamlit run app.py
 ```
 
-打开浏览器后：
+使用流程：
 
-1. 在左侧选择水平确定方式：考试成绩、快速测评结果，或手动 CEFR。
-2. CEFR 词库多数情况下保持“自动”。
-3. 拖入 `.txt` / `.md` / `.csv`，或直接粘贴文本。
-4. 点击“开始分析”。
-5. 在“导出结果”中选择导出范围和格式。
+1. 先设置英语水平：快速测评、手动 CEFR，或考试成绩换算。
+2. 上传 `.txt` / `.md` / `.csv`，或直接粘贴文章、笔记、词表。
+3. 选择本次分析使用的 CEFR 水平。
+4. 点击“分析”。
+5. 在结果页查看分类，或导出 Markdown / CSV。
 
 ---
 
-## UI 结果分类
+## UI 功能
 
-| UI 名称  | 含义                   |
-| ------ | -------------------- |
-| 待学习词汇 | 系统判断更值得优先处理的词        |
-| 可选复习词汇 | 接近当前水平，可能认识但不稳，可按需要复习 |
-| 已掌握/低优先级词汇 | 基础词、已掌握词或暂不建议投入时间的词  |
-| 专有名词   | 人名、地名、机构名等，不计入普通词汇学习 |
+### 英语水平
 
-UI 默认只显示必要字段：
+支持三种方式：
+
+| 方式 | 说明 |
+| --- | --- |
+| 快速测评结果 | 每个 CEFR 等级抽样 5 个词，共 30 个词；回答“认识 / 模糊 / 不认识”后给出建议等级 |
+| 手动选择 CEFR | 直接选择 A1、A2、B1、B2、C1、C2 |
+| 考试成绩换算 | 根据考试成绩粗略换算为筛词等级 |
+
+考试成绩换算目前支持：
+
+| 考试 | 换算范围 |
+| --- | --- |
+| CET-4 四级 | 低于 425 按 B1；425-549 按 B1；550+ 按 B2 |
+| CET-6 六级 | 低于 425 按 B1；425-599 按 B2；600+ 按 C1 |
+| IELTS 雅思 | 4.0 以下 A2；4.0-5.0 B1；5.5-6.5 B2；7.0-8.0 C1；8.5-9.0 C2 |
+| TOEFL iBT 托福 | 42 以下 A2；42-71 B1；72-94 B2；95-113 C1；114+ C2 |
+| Duolingo English Test | 80 以下 A2；80-105 B1；110-125 B2；130-145 C1；150+ C2 |
+| 高考英语 | 低于 60% A2；60%-82% B1；较高分段 B2 |
+
+这些规则只用于筛词阈值，不代表正式语言能力认证。
+
+### 个性化词表
+
+UI 当前支持上传“已掌握词”：
+
+- 支持 `.txt` / `.md`。
+- 不要求一行一个词，程序会扫描英文单词。
+- 以 `#` 开头的整行会被忽略。
+- 命中的词会优先归入“已掌握/低优先级词汇”。
+
+CLI 还支持 `--known` 和 `--unknown` 两个文件参数；其中 `--unknown` 可强制把指定词归入待学习方向。
+
+### 结果分类
+
+| 分类 | 含义 |
+| --- | --- |
+| 待学习词汇 | 高于当前水平、低频，或被个人生词规则强制标记的词 |
+| 可选复习词汇 | 接近当前水平边界，可能认识但不稳 |
+| 已掌握/低优先级词汇 | 基础词、常见词、低于当前水平的词，或已掌握词表命中的词 |
+| 词库未收录词 | CEFR 词库没有收录的词，建议人工判断 |
+| 专有名词 | 人名、地名、机构名、产品名等，默认不进入普通背词清单 |
+
+默认展示字段：
 
 ```text
 词汇 / 原文形式 / CEFR / 中文释义 / 原文句子
 ```
 
-更细的内部字段，例如 lemma、POS、Zipf、reason，保留在底层 CSV / 调试逻辑中，不再默认展示在 UI 里。
+导出时可以选择：
+
+- 导出范围：单个分类或全部结果。
+- 导出内容：仅单词、单词 + 翻译、完整字段。
+- 导出格式：Markdown 或 CSV。
 
 ---
 
-## 水平设置
+## 词库和释义
 
-支持三种方式：
+### CEFR 词库
 
-### 1. 考试成绩换算
+程序有两种 CEFR 来源：
 
-当前内置近似规则：
+| 后端 | 说明 |
+| --- | --- |
+| `csv` | 只使用项目自带或指定的 CSV 词库 |
+| `auto` / `cefrpy` | 如果安装了 `cefrpy`，优先使用它；不可用时回退到 CSV |
 
-| 考试       | 分数段     | 筛词等级 |
-| -------- | -------:| ---- |
-| 四级       | 425-549 | B1   |
-| 四级       | 550+    | B2   |
-| 六级       | 425-599 | B2   |
-| 六级       | 600+    | C1   |
-| 雅思       | 5.5-6.5 | B2   |
-| 雅思       | 7.0-8.0 | C1   |
-| 托福 iBT   | 72-94   | B2   |
-| 托福 iBT   | 95-113  | C1   |
-| Duolingo | 110-125 | B2   |
-| Duolingo | 130-145 | C1   |
+项目自带的 `data/cefr_seed.csv` 是轻量备用词库，覆盖有限。完整增强版会通过 `cefrpy` 使用更大的 CEFR 数据集。
 
-这些规则只用于筛词阈值，不代表正式语言能力认证。
-
-### 2. 快速测评
-
-提供三种完整度：
-
-```text
-简洁版：约 2 分钟
-标准版：约 5 分钟
-完整版：约 8-10 分钟
-```
-
-测评完成后，UI 会自动把建议 CEFR 等级应用到左侧设置。
-
-### 3. 手动 CEFR
-
-直接选择 A1-C2。
-
----
-
-## CEFR 词库来源
-
-UI 中提供三种简化选项：
-
-| 选项         | 含义                                          |
-| ---------- | ------------------------------------------- |
-| 自动选择       | 优先使用本地 `cefrpy`，不可用时退回备用 CSV                |
-| 本地 CEFR 词库 | 使用本机已安装的 `cefrpy` CEFR 数据，不可用时退回备用 CSV      |
-| 上传 CEFR 词库 | 使用你上传的 CSV，格式为 `word,level`，可选 `meaning_zh` |
-
-推荐依赖是 `cefrpy`，它封装了 Maximax67/Words-CEFR-Dataset。
-`cefrpy` 和项目备用 CEFR 表负责“词汇等级”，并不等同于完整双语词典。
-中文释义会依次读取本地 `data/ecdict.csv`、`data/word_meanings_extra_zh.csv` 和 `data/word_meanings_zh.csv`。
-`data/ecdict.csv` 可使用 ECDICT 的完整离线英汉词典（MIT License，文件较大，已在 `.gitignore` 中忽略）；没有完整词典时，项目自带的小型补充词表会兜底。查不到释义时 UI 会显示“暂无释义”。
-CEFR 词库未收录的词会单独进入“词库未收录词”，常见于术语、派生词或作者造词，避免被自动混入待学习清单。
-
-自定义 CSV 格式：
+自定义 CEFR CSV 可以在 CLI 中通过 `--cefr` 指定，格式如下：
 
 ```csv
 word,level
@@ -170,7 +188,7 @@ intricate,C1
 ubiquitous,C1
 ```
 
-带中文释义的自定义 CSV：
+也可以带中文释义：
 
 ```csv
 word,level,meaning_zh
@@ -178,18 +196,15 @@ intricate,C1,复杂精细的
 ubiquitous,C1,无处不在的
 ```
 
---- 
+### 中文释义
 
-## 高级个性化
+中文释义会按优先级读取：
 
-侧栏里的“已掌握词”和“需复习词”不是 CEFR 词库，而是个人覆盖规则：
+1. `data/ecdict.csv`
+2. `data/word_meanings_extra_zh.csv`
+3. `data/word_meanings_zh.csv`
 
-| 文件   | 作用                   |
-| ---- | -------------------- |
-| 已掌握词 | 即使等级较高，也优先归入“已掌握/低优先级词汇” |
-| 需复习词 | 即使等级较低，也优先归入“待学习词汇” |
-
-支持 `.txt` / `.md`。解析时会扫描英文单词，不要求一行一个；空格、换行、Markdown 列表都可以。以 `#` 开头的整行会被忽略。
+`data/ecdict.csv` 可放 ECDICT 的完整离线英汉词典。这个文件通常较大，已在 `.gitignore` 中忽略，不随仓库提交。没有完整词典时，项目自带的小型补充词表会兜底；查不到释义时 UI 会显示“暂无释义”。
 
 ---
 
@@ -201,7 +216,7 @@ ubiquitous,C1,无处不在的
 python -m vocab_filter.cli \
   --text examples/article.txt \
   --level B2 \
-  --backend auto \
+  --backend csv \
   --known data/known_words.txt \
   --unknown data/unknown_words.txt \
   --out output
@@ -213,8 +228,33 @@ python -m vocab_filter.cli \
 python -m vocab_filter.cli \
   --words examples/words.txt \
   --level B2 \
-  --backend auto \
+  --backend csv \
   --out output_words
+```
+
+可选参数：
+
+```text
+--level      用户 CEFR 等级：A1/A2/B1/B2/C1/C2
+--cefr       CEFR CSV 路径，默认 data/cefr_seed.csv
+--backend    CEFR 后端：auto / cefrpy / csv
+--known      已掌握词文件，默认 data/known_words.txt
+--unknown    生词文件，默认 data/unknown_words.txt
+--out        输出目录
+```
+
+输出文件包括：
+
+```text
+all_tokens.csv
+likely_unknown.csv
+borderline.csv
+likely_known.csv
+ungraded.csv
+proper_nouns.csv
+likely_unknown.md
+borderline.md
+ungraded.md
 ```
 
 ---
@@ -224,22 +264,51 @@ python -m vocab_filter.cli \
 ```text
 vocab-filter/
 ├── app.py                         # Streamlit UI
+├── pyproject.toml                 # 安装配置和可选依赖组
+├── requirements-ui.txt            # 轻量 UI 依赖
 ├── vocab_filter/
 │   ├── pipeline.py                # UI 和 CLI 复用的分析流程
-│   ├── lexicon.py                 # cefrpy / CSV CEFR 后端
-│   ├── level_mapping.py           # 考试成绩到 CEFR 的映射
-│   ├── export_md.py               # Markdown 导出
-│   ├── placement.py               # 词汇水平测评
-│   ├── cli.py                     # 命令行入口
 │   ├── preprocess.py              # 分词、词形还原、专有名词识别
 │   ├── scorer.py                  # 规则评分
-│   └── frequency.py               # wordfreq / fallback 词频
+│   ├── frequency.py               # wordfreq / fallback 词频
+│   ├── lexicon.py                 # cefrpy / CSV CEFR 后端
+│   ├── cefr.py                    # CEFR CSV 读取和等级规范化
+│   ├── meanings.py                # 中文释义读取
+│   ├── level_mapping.py           # 考试成绩到 CEFR 的映射
+│   ├── placement.py               # 快速测评
+│   ├── export_md.py               # Markdown 导出
+│   ├── io_utils.py                # 文件读写工具
+│   ├── cli.py                     # 命令行入口
+│   └── ui_state.py                # UI 状态辅助逻辑
 ├── data/
-│   ├── cefr_seed.csv              # fallback demo CEFR CSV
-│   ├── placement_test_words.csv   # 测评词表
-│   ├── known_words.txt
-│   └── unknown_words.txt
-└── examples/
-    ├── article.txt
-    └── words.txt
+│   ├── cefr_seed.csv              # 轻量 CEFR 备用词库
+│   ├── placement_test_words.csv   # 快速测评词表
+│   ├── known_words.txt            # 默认已掌握词
+│   ├── unknown_words.txt          # 默认生词
+│   ├── word_meanings_zh.csv       # 小型中文释义表
+│   ├── word_meanings_extra_zh.csv # 额外中文释义表
+│   └── ECDICT_LICENSE
+├── examples/
+│   ├── article.txt
+│   └── words.txt
+└── tests/
+    ├── test_selftest.py
+    └── test_ui_state.py
+```
+
+本地生成或较大的文件不会随仓库提交：
+
+```text
+data/user_profile.json
+data/ecdict.csv
+output/*.csv
+output_words/*.csv
+```
+
+---
+
+## 测试
+
+```bash
+python -m unittest discover -s tests
 ```
