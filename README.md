@@ -23,7 +23,7 @@ streamlit run app.py
 1. 设置英语水平：快速测评、手动 CEFR，或考试成绩换算。
 2. 上传 `.txt` / `.md` / `.csv`，或直接粘贴英文内容。
 3. 点击“分析”。
-4. 查看待学习词、可复习词、已掌握词、未收录词和专有名词。
+4. 查看待学习词、可复习词、低优先级词、未收录词和专有名词。
 5. 按需导出 Markdown 或 CSV。
 
 ---
@@ -86,24 +86,7 @@ python -m vocab_filter.cli --words examples/words.txt --level B2 --backend csv -
 ```text
 --level      A1/A2/B1/B2/C1/C2
 --backend    csv / auto / cefrpy
---known      已掌握词文件
---unknown    生词文件
 --out        输出目录
-```
-
----
-
-## 个人词表
-
-UI 里可以上传“已掌握词”，用于把这些词排除出待学习清单。
-
-文件可以是 `.txt` 或 `.md`，不要求一行一个词，正常写英文单词即可。
-
-命令行默认会读取：
-
-```text
-data/known_words.txt
-data/unknown_words.txt
 ```
 
 ---

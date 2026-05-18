@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import io
 import json
-import re
 from pathlib import Path
 
 import streamlit as st
@@ -12,7 +11,6 @@ from vocab_filter.export_md import rows_to_markdown
 from vocab_filter.level_mapping import CEFR_OPTIONS, score_to_cefr
 from vocab_filter.pipeline import analyze_content
 from vocab_filter.placement import estimate_level, sample_test_words
-from vocab_filter.preprocess import normalize_word, should_skip_token, simple_lemma
 from vocab_filter.ui_state import QUICK_PLACEMENT_SOURCE, should_show_level_settings_placement
 
 try:
@@ -32,22 +30,21 @@ st.set_page_config(
 RESULT_LABELS = {
     "target": "待学习词汇",
     "review": "可选复习词汇",
-    "known": "已掌握/低优先级词汇",
+    "known": "低优先级词汇",
     "ungraded": "词库未收录词",
     "proper": "专有名词",
     "all": "全部分析结果",
 }
 EXPORT_DETAIL_OPTIONS = ["仅单词", "单词 + 翻译", "完整字段"]
 CATEGORY_HELP = {
-    "target": "明显高于当前水平、或来自你的生词表，优先学习。",
+    "target": "明显高于当前水平或较低频，优先学习。",
     "review": "接近当前水平边界，可能认识但不稳，可按需要复习。",
-    "known": "按当前水平、常见度或已掌握词表判断，暂时不用优先处理。",
+    "known": "按当前水平和常见度判断，暂时不用优先处理。",
     "ungraded": "CEFR 词库没有收录的词，常见于术语、派生词或作者造词，建议单独人工判断。",
     "proper": "人名、地名、机构名等，默认不进入背词清单。",
 }
 
 PLACEMENT_WORDS_PER_LEVEL = 5
-WORD_RE = re.compile(r"[A-Za-z]+(?:[-'][A-Za-z]+)?")
 PROFILE_PATH = Path("data/user_profile.json")
 
 
@@ -1248,7 +1245,6 @@ def init_state() -> None:
     st.session_state.setdefault("placement_notice", "")
     st.session_state.setdefault("manual_cefr", None)
     st.session_state.setdefault("cefr_source", "自动选择")
-    st.session_state.setdefault("known_extra_words", set())
     st.session_state.setdefault("settings_menu_section", "常规")
     st.session_state.setdefault("level_settings_show_placement", False)
     st.session_state.setdefault("draft_exam_type", st.session_state.get("exam_type", "CET-6 六级"))
@@ -1312,26 +1308,6 @@ def decode_upload(uploaded_file) -> str:
         except UnicodeDecodeError:
             continue
     return raw.decode("utf-8", errors="ignore")
-
-
-def parse_personal_words(uploaded_file) -> set[str]:
-    if uploaded_file is None:
-        return set()
-    text = decode_upload(uploaded_file)
-    words: set[str] = set()
-    for line in text.splitlines():
-        clean = line.strip()
-        if not clean or clean.startswith("#"):
-            continue
-        for match in WORD_RE.finditer(clean):
-            surface = match.group(0)
-            word = normalize_word(surface)
-            lemma = simple_lemma(surface)
-            if word and not should_skip_token(surface, clean):
-                words.add(word)
-                if lemma:
-                    words.add(lemma)
-    return words
 
 
 def rows_to_csv_bytes(rows: list[dict]) -> bytes:
@@ -1580,20 +1556,6 @@ def render_level_settings() -> None:
             st.rerun()
 
 
-def render_personalization_settings() -> None:
-    st.markdown('<div class="vf-section-label">PERSONAL</div>', unsafe_allow_html=True)
-    known_file = st.file_uploader("已掌握词", type=["txt", "md"], key="known")
-
-    if known_file is not None:
-        st.session_state.known_extra_words = parse_personal_words(known_file)
-
-    known_count = len(st.session_state.get("known_extra_words", set()))
-    st.markdown(
-        f'<div class="vf-setting-summary"><span class="vf-level-pill">已掌握 <strong>{known_count}</strong></span></div>',
-        unsafe_allow_html=True,
-    )
-
-
 def open_dialog(title: str, renderer, *, width: str = "large") -> bool:
     dialog = getattr(st, "dialog", getattr(st, "experimental_dialog", None))
     if dialog is None:
@@ -1613,18 +1575,12 @@ def open_dialog(title: str, renderer, *, width: str = "large") -> bool:
     return True
 
 
-def render_general_settings() -> None:
-    st.markdown('<div class="vf-section-label">GENERAL</div>', unsafe_allow_html=True)
-    st.caption("界面已固定为深色模式。")
-    render_personalization_settings()
-
-
 def render_about_panel() -> None:
     st.markdown(
         """
 按你的英语水平，从文章里筛出更值得优先学习的英文词。
 
-Vocab Filter 会结合 CEFR 等级、词频和个人已掌握词表，把文本中的词汇分成待学习、可复习、已掌握和未收录等类别。
+Vocab Filter 会结合 CEFR 等级和词频，把文本中的词汇分成待学习、可复习、低优先级和未收录等类别。
 
 这个项目是开源的，仓库地址：[github.com/MrRoam/vocab-filter](https://github.com/MrRoam/vocab-filter)。
         """
@@ -1757,7 +1713,6 @@ def render_analysis(
     level_note: str,
     backend: str,
     default_cefr_path: str,
-    known_extra: set[str],
 ) -> None:
     if st.session_state.placement_notice:
         st.success(st.session_state.placement_notice)
@@ -1828,7 +1783,6 @@ def render_analysis(
                     cefr_backend=backend,
                     cefr_csv=default_cefr_path,
                     unknown_path=None,
-                    known_words_extra=known_extra,
                 )
 
             st.session_state["last_result"] = result
@@ -1947,36 +1901,12 @@ def render_placement_settings(*, show_heading: bool = True) -> None:
         show_table(display_rates, height=250)
 
 
-def render_help_settings() -> None:
-    st.markdown(
-        """
-### 词库
-自动模式优先使用 cefrpy，必要时回退到项目 CSV。
-
-### 个性化
-上传“已掌握词”可从待学习词汇中排除。
-        """
-    )
-
-
-def render_settings_panel() -> None:
-    st.markdown('<div class="vf-settings-panel">', unsafe_allow_html=True)
-    render_general_settings()
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
 def render_inline_dialog_fallback() -> None:
     if st.session_state.get("placement_inline_open"):
         if st.button("关闭水平测评", key="close_placement_fallback"):
             st.session_state.placement_inline_open = False
             st.rerun()
         render_placement_settings()
-
-    if st.session_state.get("settings_inline_open"):
-        if st.button("关闭设置", key="close_settings_fallback"):
-            st.session_state.settings_inline_open = False
-            st.rerun()
-        render_settings_panel()
 
     if st.session_state.get("level_settings_inline_open"):
         if st.button("关闭英语水平设置", key="close_level_settings_fallback"):
@@ -1997,9 +1927,8 @@ st.session_state["_dialog_opened_this_run"] = False
 
 user_level, level_mode, level_note = current_level_from_state()
 backend, default_cefr_path = cefr_runtime_settings()
-known_extra = st.session_state.get("known_extra_words", set())
 
 render_topbar(user_level)
 render_inline_dialog_fallback()
 
-render_analysis(user_level, level_note, backend, default_cefr_path, known_extra)
+render_analysis(user_level, level_note, backend, default_cefr_path)
