@@ -14,18 +14,55 @@
 
 ## 安装
 
-推荐安装 UI 版本：
+项目的核心逻辑不强依赖大型第三方库。新电脑上如果只是想先跑起来，建议从轻量方式开始。
 
-```bash
-pip install -e ".[ui]"
-python -m spacy download en_core_web_sm
-```
+### 方式一：命令行最小版
 
-如果只想运行命令行最小版：
+只安装项目本身，不安装 UI 和增强词库：
 
 ```bash
 pip install -e .
 ```
+
+运行示例：
+
+```bash
+python -m vocab_filter.cli --text examples/article.txt --level B2 --backend csv --out output
+```
+
+这个方式下载最少，适合先验证项目是否可用。
+
+### 方式二：轻量 UI 版
+
+只安装 UI 必需依赖：
+
+```bash
+pip install -e ".[ui]"
+```
+
+如果不想安装 spaCy，可以在当前 PowerShell 里启用轻量分词：
+
+```powershell
+$env:VOCAB_FILTER_NO_SPACY="1"
+streamlit run app.py
+```
+
+轻量 UI 可以正常打开和分析，但会使用项目内置的简化逻辑：
+
+- 不装 `spacy`：使用正则分词和简单词形还原，专有名词识别会粗一些。
+- 不装 `wordfreq`：使用内置粗略词频表，词频判断不如完整库细。
+- 不装 `cefrpy`：使用项目自带 `data/cefr_seed.csv` 或你上传的 CEFR CSV，词库覆盖更小。
+
+### 方式三：完整 UI 版
+
+如果想要更好的分词、词形还原、词频和 CEFR 覆盖，再安装完整增强依赖：
+
+```bash
+pip install -e ".[full]"
+python -m spacy download en_core_web_sm
+```
+
+这个命令会安装 `streamlit`、`pandas`、`spacy`、`wordfreq`、`cefrpy` 以及它们的间接依赖，所以首次下载会比较多。这不是运行项目的硬性要求，而是完整体验所需。
 
 ---
 

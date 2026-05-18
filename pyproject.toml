@@ -7,12 +7,16 @@ requires-python = ">=3.9"
 dependencies = []
 
 [project.optional-dependencies]
-full = [
+ui = [
+    "streamlit>=1.31",
+    "pandas>=1.5",
+]
+nlp = [
     "spacy>=3.7",
     "wordfreq>=3.1",
     "cefrpy>=1.0",
 ]
-ui = [
+full = [
     "streamlit>=1.31",
     "pandas>=1.5",
     "spacy>=3.7",
