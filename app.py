@@ -13,6 +13,7 @@ from vocab_filter.level_mapping import CEFR_OPTIONS, score_to_cefr
 from vocab_filter.pipeline import analyze_content
 from vocab_filter.placement import estimate_level, sample_test_words
 from vocab_filter.preprocess import normalize_word, should_skip_token, simple_lemma
+from vocab_filter.ui_state import QUICK_PLACEMENT_SOURCE, should_show_level_settings_placement
 
 try:
     import pandas as pd  # type: ignore
@@ -517,7 +518,7 @@ div[role="dialog"] .vf-level-pill strong {
   min-height: 56px;
   padding-bottom: .75rem;
   border-bottom: 1px solid var(--vf-line);
-  margin-bottom: 1.4rem;
+  margin-bottom: .85rem;
 }
 .vf-brand {
   display: inline-flex;
@@ -681,27 +682,73 @@ div[role="dialog"] .vf-level-pill strong {
 }
 .vf-workspace-heading {
   width: min(760px, 100%);
-  margin: 0 auto 1.45rem;
+  margin: 0 auto 1rem;
   text-align: center;
   animation: vf-rise 420ms cubic-bezier(.165, .84, .44, 1) both;
 }
 .vf-workspace-heading h2 {
-  font-size: clamp(2.05rem, 5vw, 3.25rem);
+  font-size: clamp(1.75rem, 4vw, 2.55rem);
   font-weight: 660;
   line-height: 1;
 }
 .vf-workspace-heading p {
-  margin: .7rem auto 0;
+  margin: .45rem auto 0;
   max-width: 520px;
   color: var(--vf-muted);
-  font-size: clamp(1rem, 2vw, 1.12rem);
+  font-size: clamp(.92rem, 1.8vw, 1rem);
   line-height: 1.35;
+}
+.vf-level-onboarding-copy {
+  width: min(768px, 100%);
+  margin: 0 auto .8rem;
+  padding: 1rem;
+  border: 1px solid var(--vf-line);
+  border-radius: 24px;
+  background: var(--vf-surface);
+  box-shadow: var(--vf-shadow-soft);
+  backdrop-filter: blur(18px);
+  animation: vf-rise 460ms cubic-bezier(.165, .84, .44, 1) 40ms both;
+}
+.vf-level-onboarding-copy h3 {
+  margin: 0;
+  font-size: 1.18rem;
+  line-height: 1.25;
+}
+.vf-level-onboarding-copy p {
+  margin: .35rem 0 .85rem;
+  color: var(--vf-muted);
+  font-size: .94rem;
+  line-height: 1.5;
+}
+.vf-level-current {
+  width: min(768px, 100%);
+  margin: 0 auto 1rem;
+  text-align: center;
+}
+.vf-input-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  min-height: 42px;
+  padding: .18rem .2rem .35rem;
+  color: var(--vf-shell-text);
+  font-size: .95rem;
+  font-weight: 680;
+}
+.vf-input-title small {
+  color: var(--vf-shell-muted);
+  font-size: .76rem;
+  font-weight: 520;
+}
+.vf-action-align {
+  height: 1.75rem;
 }
 .vf-workspace-kicker {
   display: inline-flex;
   align-items: center;
   gap: .5rem;
-  margin-bottom: 1rem;
+  margin-bottom: .65rem;
   padding: .42rem .68rem .42rem .48rem;
   border-radius: 999px;
   background: var(--vf-surface-soft);
@@ -749,10 +796,10 @@ div[role="dialog"] .vf-level-pill strong {
   margin-bottom: .35rem;
 }
 .vf-analysis-shell [data-testid="stFileUploaderDropzone"] {
-  min-height: 44px;
-  padding: .35rem .55rem;
+  min-height: 148px;
+  padding: .85rem .7rem;
   border-style: solid;
-  border-radius: 999px;
+  border-radius: 20px;
   background: rgba(255, 255, 255, 0.035);
 }
 .vf-analysis-shell [data-testid="stFileUploaderDropzone"] button {
@@ -760,7 +807,7 @@ div[role="dialog"] .vf-level-pill strong {
   border-radius: 999px;
 }
 .vf-analysis-shell textarea {
-  min-height: 128px !important;
+  min-height: 148px !important;
   max-height: max(35svh, 13rem);
   padding: .75rem .85rem !important;
   border: 0 !important;
@@ -785,6 +832,32 @@ div[role="dialog"] .vf-level-pill strong {
 .vf-analysis-shell .stButton > button:hover {
   transform: translateY(-1px);
   box-shadow: var(--vf-shadow);
+}
+div[data-testid="stHorizontalBlock"]:has(.vf-input-title):has(.vf-upload-slot),
+div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]):has(button[kind="primary"]) {
+  width: min(768px, 100%) !important;
+  margin-left: auto;
+  margin-right: auto;
+}
+div[data-testid="stHorizontalBlock"]:has(.vf-upload-slot) [data-testid="stFileUploader"] {
+  width: 100% !important;
+  margin: 0 0 .35rem;
+}
+div[data-testid="stHorizontalBlock"]:has(.vf-upload-slot) [data-testid="stFileUploaderDropzone"] {
+  min-height: 42px;
+  padding: 0;
+  justify-content: flex-end;
+  border-color: transparent !important;
+  border-radius: 999px;
+  background: transparent !important;
+}
+div[data-testid="stHorizontalBlock"]:has(.vf-upload-slot) [data-testid="stFileUploaderDropzone"] button {
+  min-height: 32px;
+  border-radius: 999px;
+}
+div[data-testid="stHorizontalBlock"]:has(.vf-upload-slot) [data-testid="stFileUploaderDropzoneInstructions"],
+div[data-testid="stHorizontalBlock"]:has(.vf-upload-slot) [data-testid="stFileUploaderDropzone"] small {
+  display: none !important;
 }
 [data-testid="stFileUploader"],
 [data-testid="stTextArea"] {
@@ -826,6 +899,20 @@ div[data-testid="stButton"]:has(button[kind="primary"]) {
 }
 div[data-testid="stButton"]:has(button[kind="primary"]) > button {
   border-radius: 999px;
+}
+div[role="dialog"] div[data-testid="stButton"]:has(button[kind="primary"]),
+div[data-testid="stDialog"] div[data-testid="stButton"]:has(button[kind="primary"]) {
+  width: fit-content !important;
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+div[role="dialog"] div[data-testid="stButton"]:has(button[kind="primary"]) > button,
+div[data-testid="stDialog"] div[data-testid="stButton"]:has(button[kind="primary"]) > button {
+  min-width: 0;
+  width: auto !important;
+  padding-left: 1.15rem !important;
+  padding-right: 1.15rem !important;
 }
 .vf-settings-panel {
   padding: .2rem 0 .6rem;
@@ -1349,19 +1436,12 @@ def simple_export_rows(rows: list[dict], detail: str) -> list[dict]:
 
 
 def rows_to_simple_markdown(rows: list[dict], title: str, detail: str) -> str:
-    lines = [f"# {title}", ""]
-    if not rows:
-        lines.append("未发现符合条件的词汇。")
-        return "\n".join(lines)
+    lines: list[str] = []
     for row in rows:
         word = export_word(row)
         if not word:
             continue
-        meaning = (row.get("meaning_zh") or "").strip()
-        if detail == "单词 + 翻译" and meaning:
-            lines.append(f"- {word}：{meaning}")
-        else:
-            lines.append(f"- {word}")
+        lines.append(word)
     return "\n".join(lines)
 
 
@@ -1415,10 +1495,10 @@ def render_exam_score_input(exam: str, *, key: str) -> float:
 
 def render_level_settings() -> None:
     st.markdown('<div class="vf-section-label">LEVEL</div>', unsafe_allow_html=True)
-    level_options = ["快速测评结果", "考试成绩换算", "手动选择 CEFR"]
+    level_options = [QUICK_PLACEMENT_SOURCE, "考试成绩换算", "手动选择 CEFR"]
     current_source = st.session_state.get("level_source")
     if "level_source_choice" not in st.session_state:
-        st.session_state.level_source_choice = current_source if current_source in level_options else "快速测评结果"
+        st.session_state.level_source_choice = current_source if current_source in level_options else QUICK_PLACEMENT_SOURCE
     level_source = st.radio(
         "确定方式",
         level_options,
@@ -1429,6 +1509,13 @@ def render_level_settings() -> None:
     if st.session_state.placement_notice:
         st.success(st.session_state.placement_notice)
         st.session_state.placement_notice = ""
+
+    show_placement = should_show_level_settings_placement(
+        level_source,
+        st.session_state.get("level_settings_show_placement", False),
+    )
+    if level_source != QUICK_PLACEMENT_SOURCE and st.session_state.get("level_settings_show_placement"):
+        st.session_state.level_settings_show_placement = False
 
     if level_source == "考试成绩换算":
         exam_options = ["CET-4 四级", "CET-6 六级", "IELTS 雅思", "TOEFL iBT 托福", "Duolingo English Test", "高考英语"]
@@ -1449,24 +1536,28 @@ def render_level_settings() -> None:
             f'<div class="vf-setting-summary"><span class="vf-level-pill">换算结果 <strong>{estimate.level}</strong></span></div>',
             unsafe_allow_html=True,
         )
-        if st.button("使用这个水平", type="primary", use_container_width=True, key="apply_exam_level"):
+        if st.button("使用这个水平", type="primary", key="apply_exam_level"):
             st.session_state.exam_type = exam
             st.session_state.exam_score = st.session_state.draft_exam_score
             st.session_state.level_source = "考试成绩换算"
+            st.session_state.analysis_cefr_level = estimate.level
+            st.session_state.level_settings_show_placement = False
             st.session_state.placement_notice = f"已按 {exam} {st.session_state.draft_exam_score:g} 应用：{estimate.level}。"
             save_user_profile()
             st.rerun()
 
-    elif level_source == "快速测评结果":
+    elif level_source == QUICK_PLACEMENT_SOURCE:
         if not st.session_state.get("measured_level"):
             st.info("还没有测评结果，先完成一次测评。")
-        if st.button("开始测评", type="primary", use_container_width=True, key="start_placement_from_level"):
+        if st.button("开始测评", type="primary", key="start_placement_from_level"):
             st.session_state.level_settings_show_placement = True
-        if st.session_state.get("level_settings_show_placement"):
+            show_placement = True
+        if show_placement:
             render_placement_settings(show_heading=False)
         elif st.session_state.get("measured_level"):
-            if st.button("使用测评结果", type="primary", use_container_width=True, key="apply_measured_level"):
-                st.session_state.level_source = "快速测评结果"
+            if st.button("使用测评结果", type="primary", key="apply_measured_level"):
+                st.session_state.level_source = QUICK_PLACEMENT_SOURCE
+                st.session_state.analysis_cefr_level = st.session_state.measured_level
                 st.session_state.placement_notice = f"已应用测评结果：{st.session_state.measured_level}。"
                 save_user_profile()
                 st.rerun()
@@ -1479,9 +1570,11 @@ def render_level_settings() -> None:
             index=CEFR_OPTIONS.index(selected) if selected in CEFR_OPTIONS else 2,
             key="manual_cefr_choice",
         )
-        if st.button("使用这个等级", type="primary", use_container_width=True, key="apply_manual_level"):
+        if st.button("使用这个等级", type="primary", key="apply_manual_level"):
             st.session_state.manual_cefr = st.session_state.manual_cefr_choice
             st.session_state.level_source = "手动选择 CEFR"
+            st.session_state.analysis_cefr_level = st.session_state.manual_cefr
+            st.session_state.level_settings_show_placement = False
             st.session_state.placement_notice = f"已应用手动等级：{st.session_state.manual_cefr}。"
             save_user_profile()
             st.rerun()
@@ -1526,49 +1619,73 @@ def render_general_settings() -> None:
     render_personalization_settings()
 
 
+def render_about_panel() -> None:
+    st.markdown(
+        """
+按你的英语水平，从文章里筛出更值得优先学习的英文词。
+
+Vocab Filter 会结合 CEFR 等级、词频和个人已掌握词表，把文本中的词汇分成待学习、可复习、已掌握和未收录等类别。
+
+这个项目是开源的，仓库地址：[github.com/MrRoam/vocab-filter](https://github.com/MrRoam/vocab-filter)。
+        """
+    )
+
+
 def render_topbar(user_level: str | None) -> None:
-    left, level_col, settings_col = st.columns([7.2, 1.05, .72])
+    left, level_col, about_col = st.columns([6, 1.8, 1.1])
     with left:
         st.markdown(
             '<div class="vf-brand"><span class="vf-brand-mark">VF</span><span>Vocab Filter</span></div>',
             unsafe_allow_html=True,
         )
     with level_col:
-        level_label = f"LEVEL {user_level}" if user_level else "LEVEL 待测评"
+        level_label = f"LEVEL {user_level}" if user_level else "LEVEL 待设置"
         if st.button(level_label, use_container_width=True, key="topbar_level"):
-            title = "重新测试" if user_level else "英语水平测评"
-            if not open_dialog(title, render_placement_settings):
-                st.session_state.placement_inline_open = True
+            if not open_dialog("英语水平设置", render_level_settings, width="medium"):
+                st.session_state.level_settings_inline_open = True
                 st.rerun()
-    with settings_col:
-        if st.button("设置", use_container_width=True):
-            if not open_dialog("设置", render_settings_panel):
-                st.session_state.settings_inline_open = True
+    with about_col:
+        if st.button("关于", use_container_width=True):
+            if not open_dialog("关于", render_about_panel, width="small"):
+                st.session_state.about_inline_open = True
                 st.rerun()
     st.markdown('<div class="vf-top-rule"></div>', unsafe_allow_html=True)
 
 
-def render_level_picker(user_level: str | None, level_note: str) -> None:
-    st.markdown('<div class="vf-side-panel">', unsafe_allow_html=True)
-    st.markdown('<div class="vf-section-label">LEVEL</div>', unsafe_allow_html=True)
+def render_level_picker(user_level: str | None, level_note: str, *, centered: bool = False) -> None:
     if user_level:
+        st.markdown('<div class="vf-section-label">LEVEL</div>', unsafe_allow_html=True)
         st.markdown(
             f'<div class="vf-setting-summary"><span class="vf-level-pill">当前 <strong>{user_level}</strong></span></div>',
             unsafe_allow_html=True,
         )
         st.caption(level_note)
     else:
-        st.info("先选择一个英语水平；不想测评也可以直接按考试成绩或 CEFR 等级设置。")
+        if centered:
+            st.markdown(
+                """
+<div class="vf-level-onboarding-copy">
+  <div class="vf-section-label">LEVEL</div>
+  <h3>先确定你的英语水平</h3>
+  <p>可以先做一次快速测评，也可以直接按 CEFR 或考试成绩设置。</p>
+</div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown('<div class="vf-section-label">LEVEL</div>', unsafe_allow_html=True)
+            st.info("先选择一个英语水平；不想测评也可以直接按考试成绩或 CEFR 等级设置。")
 
-    level_options = ["手动选择 CEFR", "考试成绩换算", "快速测评结果"]
+    level_options = ["快速测评结果", "手动选择 CEFR", "考试成绩换算"] if centered else ["手动选择 CEFR", "考试成绩换算", "快速测评结果"]
     current_source = st.session_state.get("level_source")
     if "analysis_level_source_choice" not in st.session_state:
-        st.session_state.analysis_level_source_choice = current_source if current_source in level_options else "手动选择 CEFR"
+        default_source = "快速测评结果" if centered else "手动选择 CEFR"
+        st.session_state.analysis_level_source_choice = current_source if current_source in level_options else default_source
     level_source = st.radio(
         "确定方式",
         level_options,
         key="analysis_level_source_choice",
-        horizontal=False,
+        horizontal=centered,
     )
 
     if level_source == "手动选择 CEFR":
@@ -1582,6 +1699,7 @@ def render_level_picker(user_level: str | None, level_note: str) -> None:
         if st.button("应用水平", type="primary", use_container_width=True, key="analysis_apply_manual_level"):
             st.session_state.manual_cefr = st.session_state.analysis_manual_cefr_choice
             st.session_state.level_source = "手动选择 CEFR"
+            st.session_state.analysis_cefr_level = st.session_state.manual_cefr
             st.session_state.placement_notice = f"已应用手动等级：{st.session_state.manual_cefr}。"
             save_user_profile()
             st.rerun()
@@ -1610,6 +1728,7 @@ def render_level_picker(user_level: str | None, level_note: str) -> None:
             st.session_state.exam_type = exam
             st.session_state.exam_score = st.session_state.analysis_exam_score
             st.session_state.level_source = "考试成绩换算"
+            st.session_state.analysis_cefr_level = estimate.level
             st.session_state.placement_notice = f"已按 {exam} {st.session_state.analysis_exam_score:g} 应用：{estimate.level}。"
             save_user_profile()
             st.rerun()
@@ -1623,6 +1742,7 @@ def render_level_picker(user_level: str | None, level_note: str) -> None:
             )
             if st.button("应用测评结果", type="primary", use_container_width=True, key="analysis_apply_measured_level"):
                 st.session_state.level_source = "快速测评结果"
+                st.session_state.analysis_cefr_level = measured
                 st.session_state.placement_notice = f"已应用测评结果：{measured}。"
                 save_user_profile()
                 st.rerun()
@@ -1630,7 +1750,6 @@ def render_level_picker(user_level: str | None, level_note: str) -> None:
             if not open_dialog("英语水平测评", render_placement_settings):
                 st.session_state.placement_inline_open = True
                 st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_analysis(
@@ -1640,54 +1759,71 @@ def render_analysis(
     default_cefr_path: str,
     known_extra: set[str],
 ) -> None:
-    st.markdown(
-        """
-<div class="vf-workspace-heading">
-  <div class="vf-workspace-kicker"><strong>VF</strong><span>Level-aware vocabulary filter</span></div>
-  <h2>筛出值得学的词</h2>
-  <p>上传文件或直接粘贴文章，右侧选择英语水平后开始分析。</p>
-</div>
-        """,
-        unsafe_allow_html=True,
-    )
     if st.session_state.placement_notice:
         st.success(st.session_state.placement_notice)
         st.session_state.placement_notice = ""
 
-    input_col, level_col = st.columns([2.15, 1], gap="large")
-    with input_col:
-        st.markdown('<div class="vf-analysis-shell">', unsafe_allow_html=True)
+    _, center_col, _ = st.columns([.12, 5, .12])
+    with center_col:
+        if user_level is None:
+            render_level_picker(user_level, level_note, centered=True)
+
         st.markdown('<div class="vf-section-label">INPUT</div>', unsafe_allow_html=True)
-        uploaded = st.file_uploader(
-            "上传文件或粘贴文章",
-            type=["txt", "md", "csv"],
-            accept_multiple_files=False,
-            key="analysis_upload",
-            help="支持 txt、md、csv；如果同时上传文件和粘贴文本，会优先分析上传文件。",
-        )
+        input_title_col, upload_col = st.columns([2.45, .55], gap="small")
+        with input_title_col:
+            st.markdown(
+                '<div class="vf-input-title"><span>上传文件或粘贴文章</span><small>txt / md / csv</small></div>',
+                unsafe_allow_html=True,
+            )
+        with upload_col:
+            st.markdown('<div class="vf-upload-slot"></div>', unsafe_allow_html=True)
+            uploaded = st.file_uploader(
+                "上传文件",
+                type=["txt", "md", "csv"],
+                accept_multiple_files=False,
+                key="analysis_upload",
+                help="支持 txt、md、csv；如果同时上传文件和粘贴文本，会优先分析上传文件。",
+                label_visibility="collapsed",
+            )
         pasted_text = st.text_area(
             "粘贴文章或词汇表",
             height=230,
             placeholder="Paste an article, notes, or a word list...",
             key="analysis_text",
+            label_visibility="collapsed",
         )
+
+        default_analysis_level = user_level if user_level in CEFR_OPTIONS else "B1"
+        analysis_level_key = "analysis_cefr_level"
+        if st.session_state.get(analysis_level_key) not in CEFR_OPTIONS:
+            st.session_state.pop(analysis_level_key, None)
         analyze_label = "重新分析" if st.session_state.get("last_result") else "分析"
-        analyze_btn = st.button(analyze_label, type="primary", use_container_width=True, key="analyze_button")
-        st.markdown("</div>", unsafe_allow_html=True)
-    with level_col:
-        render_level_picker(user_level, level_note)
+        level_col, analyze_col = st.columns([.55, 2.45], gap="small")
+        with level_col:
+            level_select_kwargs = {
+                "key": analysis_level_key,
+                "help": "只影响这次文章分析，可以临时切到 A1、B1 等水平查看筛词差异。",
+            }
+            if analysis_level_key not in st.session_state:
+                level_select_kwargs["index"] = CEFR_OPTIONS.index(default_analysis_level)
+            analysis_level = st.selectbox(
+                "分析水平",
+                CEFR_OPTIONS,
+                **level_select_kwargs,
+            )
+        with analyze_col:
+            st.markdown('<div class="vf-action-align"></div>', unsafe_allow_html=True)
+            analyze_btn = st.button(analyze_label, type="primary", use_container_width=True, key="analyze_button")
 
     if analyze_btn:
-        if user_level is None:
-            st.warning("请先在右侧选择英语水平，再开始分析。可以跳过测评，直接用考试成绩或 CEFR 等级。")
-        elif uploaded is None and not pasted_text.strip():
+        if uploaded is None and not pasted_text.strip():
             st.warning("请上传文件或粘贴文本。")
         else:
             content = decode_upload(uploaded) if uploaded is not None else pasted_text
             with st.spinner("正在分析..."):
                 result = analyze_content(
                     content,
-                    user_level=user_level,
+                    user_level=analysis_level,
                     input_mode="auto",
                     cefr_backend=backend,
                     cefr_csv=default_cefr_path,
@@ -1696,7 +1832,7 @@ def render_analysis(
                 )
 
             st.session_state["last_result"] = result
-            st.session_state["last_analysis_level"] = user_level
+            st.session_state["last_analysis_level"] = analysis_level
             st.success("分析完成")
 
     result = st.session_state.get("last_result")
@@ -1711,8 +1847,8 @@ def render_analysis(
     c4.metric(RESULT_LABELS["ungraded"], s["ungraded"])
     c5.metric("专有名词", s["proper_nouns"])
 
-    if st.session_state.get("last_analysis_level") and st.session_state.get("last_analysis_level") != user_level:
-        st.info("英语水平已切换，点击上方“重新分析”可按新水平刷新结果。")
+    if st.session_state.get("last_analysis_level") and st.session_state.get("last_analysis_level") != analysis_level:
+        st.info("分析水平已切换，点击上方“重新分析”可按新水平刷新结果。")
 
     out1, out2, out3, out4, out5 = st.tabs([
         RESULT_LABELS["target"],
@@ -1796,6 +1932,7 @@ def render_placement_settings(*, show_heading: bool = True) -> None:
         st.session_state.measured_level = est["suggested_level"]
         st.session_state.level_source = "快速测评结果"
         st.session_state.level_source_choice = "快速测评结果"
+        st.session_state.analysis_cefr_level = est["suggested_level"]
         st.session_state.placement_notice = f"测评完成，已自动应用：{est['suggested_level']}。"
         st.session_state.placement_rates = est["rates"]
         st.session_state.placement_inline_open = False
@@ -1824,25 +1961,7 @@ def render_help_settings() -> None:
 
 def render_settings_panel() -> None:
     st.markdown('<div class="vf-settings-panel">', unsafe_allow_html=True)
-    nav_col, content_col = st.columns([0.78, 2.05], gap="large")
-    with nav_col:
-        setting_sections = ["常规", "英语水平"]
-        if st.session_state.get("settings_menu_section") == "水平":
-            st.session_state.settings_menu_section = "英语水平"
-        if st.session_state.get("settings_menu_section") not in setting_sections:
-            st.session_state.settings_menu_section = "常规"
-        section = st.radio(
-            "设置区域",
-            setting_sections,
-            key="settings_menu_section",
-            label_visibility="collapsed",
-        )
-
-    with content_col:
-        if section == "常规":
-            render_general_settings()
-        else:
-            render_level_settings()
+    render_general_settings()
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -1858,6 +1977,18 @@ def render_inline_dialog_fallback() -> None:
             st.session_state.settings_inline_open = False
             st.rerun()
         render_settings_panel()
+
+    if st.session_state.get("level_settings_inline_open"):
+        if st.button("关闭英语水平设置", key="close_level_settings_fallback"):
+            st.session_state.level_settings_inline_open = False
+            st.rerun()
+        render_level_settings()
+
+    if st.session_state.get("about_inline_open"):
+        if st.button("关闭关于", key="close_about_fallback"):
+            st.session_state.about_inline_open = False
+            st.rerun()
+        render_about_panel()
 
 
 init_state()

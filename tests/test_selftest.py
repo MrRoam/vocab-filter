@@ -75,7 +75,10 @@ def test_pipeline_outputs_markdown():
         cefr_csv="data/cefr_seed.csv",
     )
     assert any(row["lemma"] == "intricate" for row in result.likely_unknown)
-    assert "# 待学习词汇" in result.likely_unknown_md
+    markdown_lines = result.likely_unknown_md.splitlines()
+    assert "intricate" in markdown_lines
+    assert "待学习词汇" not in result.likely_unknown_md
+    assert all(not line.startswith(("#", "-")) for line in markdown_lines)
 
 
 def test_extra_chinese_meanings_are_used():
