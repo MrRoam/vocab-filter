@@ -26,18 +26,6 @@ streamlit run app.py
 4. 查看待学习词、可复习词、低优先级词、未收录词和专有名词。
 5. 按需导出 Markdown 或 CSV。
 
----
-
-## 中文释义词库
-
-中文释义主要来自 `data/ecdict.csv`。这个文件现在已经提交到 git，所以新电脑只要先 `git clone` 或 `git pull` 到最新版，就会带上完整中文释义词库。
-
-`pip install -e ".[ui]"` 和 `pip install -e ".[full]"` 都不会单独下载词库；它们只负责安装 Python 依赖。区别是：
-
-- `.[ui]`：安装运行网页界面需要的轻量依赖。
-- `.[full]`：额外安装 spaCy、wordfreq、cefrpy，让分词、词形还原、词频和 CEFR 覆盖更好。
-
-也就是说，中文释义是否完整，关键看项目目录里有没有 `data/ecdict.csv`，不是看装的是 `.[ui]` 还是 `.[full]`。
 
 ---
 
