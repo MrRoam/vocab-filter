@@ -37,6 +37,20 @@ class LevelSettingsStateTest(unittest.TestCase):
         markdown_values = [markdown.value for markdown in at.markdown]
         self.assertFalse(any("关于 Vocab Filter" in value for value in markdown_values))
 
+    def test_uploaded_file_uses_native_uploader_without_extra_clear_button(self):
+        filename = "CET6_Vocab_really_long_uploaded_file_name_for_testing_visibility.csv"
+        at = AppTest.from_file("app.py", default_timeout=10).run()
+
+        at = at.file_uploader[0].upload(filename, b"word\nhello\n", "text/csv").run()
+
+        self.assertEqual(at.file_uploader[0].key, "analysis_upload")
+        self.assertFalse(any(button.key == "clear_analysis_upload" for button in at.button))
+        self.assertFalse(any("vf-upload-file" in markdown.value for markdown in at.markdown))
+
+        at = at.file_uploader[0].clear().run()
+
+        self.assertIsNone(at.file_uploader[0].value)
+
 
 if __name__ == "__main__":
     unittest.main()

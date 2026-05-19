@@ -113,3 +113,50 @@
 [446789384ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
 [446789385ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/host-config:0
 [447482440ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[462472072ms] [WARNING] WebSocket onclose @ http://localhost:8501/static/js/index.D2ZqaFuW.js:17
+[462472261ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[462472263ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/host-config:0
+[469695520ms] [WARNING] WebSocket onclose @ http://localhost:8501/static/js/index.D2ZqaFuW.js:17
+[469695543ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[469695543ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/host-config:0
+[472089507ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[472090754ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:8501/_stcore/health:0
+[472097436ms] [WARNING] WebSocket onclose @ http://localhost:8501/static/js/index.D2ZqaFuW.js:17
+[472097445ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[472097445ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/host-config:0
+[480495390ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[480495390ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/host-config:0
+[490970947ms] [WARNING] WebSocket onclose @ http://localhost:8501/static/js/index.D2ZqaFuW.js:17
+[490971112ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[490971113ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/host-config:0
+[491354774ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[491359611ms] [WARNING] WebSocket onclose @ http://localhost:8501/static/js/index.D2ZqaFuW.js:17
+[491359622ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[491359622ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/host-config:0
+[495612306ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:8501/_stcore/health:0
+[495612306ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:8501/_stcore/host-config:0
+[505055277ms] [WARNING] WebSocket onclose @ http://localhost:8501/static/js/index.D2ZqaFuW.js:17
+[505055436ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[505055437ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/host-config:0
+[506301526ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[506302001ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:8501/_stcore/health:0
+[506306756ms] [WARNING] WebSocket onclose @ http://localhost:8501/static/js/index.D2ZqaFuW.js:17
+[506307492ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[506307492ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/host-config:0
+[507844765ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[507844766ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:8501/_stcore/host-config:0
+[519559481ms] [WARNING] WebSocket onclose @ http://localhost:8501/static/js/index.D2ZqaFuW.js:17
+[519559727ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[519559729ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/host-config:0
+[522509771ms] [WARNING] WebSocket onclose @ http://localhost:8501/static/js/index.D2ZqaFuW.js:17
+[522509849ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[522509849ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/host-config:0
+[525933050ms] [WARNING] WebSocket onclose @ http://localhost:8501/static/js/index.D2ZqaFuW.js:17
+[525933138ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[525933140ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/host-config:0
+[527512412ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[527517158ms] [WARNING] WebSocket onclose @ http://localhost:8501/static/js/index.D2ZqaFuW.js:17
+[527517174ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/health:0
+[527517174ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ http://localhost:8501/_stcore/host-config:0
+[530060112ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:8501/_stcore/health:0
+[530060113ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ http://localhost:8501/_stcore/host-config:0

@@ -727,7 +727,9 @@ div[role="dialog"] .vf-level-pill strong {
   align-items: center;
   justify-content: space-between;
   gap: .75rem;
+  width: min(768px, 100%);
   min-height: 42px;
+  margin: 0 auto .2rem;
   padding: .18rem .2rem .35rem;
   color: var(--vf-shell-text);
   font-size: .95rem;
@@ -830,31 +832,10 @@ div[role="dialog"] .vf-level-pill strong {
   transform: translateY(-1px);
   box-shadow: var(--vf-shadow);
 }
-div[data-testid="stHorizontalBlock"]:has(.vf-input-title):has(.vf-upload-slot),
 div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]):has(button[kind="primary"]) {
   width: min(768px, 100%) !important;
   margin-left: auto;
   margin-right: auto;
-}
-div[data-testid="stHorizontalBlock"]:has(.vf-upload-slot) [data-testid="stFileUploader"] {
-  width: 100% !important;
-  margin: 0 0 .35rem;
-}
-div[data-testid="stHorizontalBlock"]:has(.vf-upload-slot) [data-testid="stFileUploaderDropzone"] {
-  min-height: 42px;
-  padding: 0;
-  justify-content: flex-end;
-  border-color: transparent !important;
-  border-radius: 999px;
-  background: transparent !important;
-}
-div[data-testid="stHorizontalBlock"]:has(.vf-upload-slot) [data-testid="stFileUploaderDropzone"] button {
-  min-height: 32px;
-  border-radius: 999px;
-}
-div[data-testid="stHorizontalBlock"]:has(.vf-upload-slot) [data-testid="stFileUploaderDropzoneInstructions"],
-div[data-testid="stHorizontalBlock"]:has(.vf-upload-slot) [data-testid="stFileUploaderDropzone"] small {
-  display: none !important;
 }
 [data-testid="stFileUploader"],
 [data-testid="stTextArea"] {
@@ -863,23 +844,86 @@ div[data-testid="stHorizontalBlock"]:has(.vf-upload-slot) [data-testid="stFileUp
   margin-right: auto;
 }
 [data-testid="stFileUploader"] {
-  margin-bottom: .55rem;
+  margin-bottom: 0 !important;
 }
 [data-testid="stFileUploaderDropzone"] {
-  min-height: 58px;
-  padding: .42rem .75rem;
-  border-style: solid;
-  border-radius: 22px;
-  background: color-mix(in srgb, var(--vf-shell) 76%, transparent);
+  min-height: 58px !important;
+  padding: .5rem .72rem .5rem .95rem !important;
+  border-style: solid !important;
+  border-bottom: 0 !important;
+  border-radius: 24px 24px 0 0 !important;
+  background: color-mix(in srgb, var(--vf-shell) 82%, transparent) !important;
+  box-shadow: 0 0 0 1px var(--vf-shell-ring), var(--vf-shadow-soft);
 }
 [data-testid="stFileUploaderDropzone"]:hover {
   border-color: var(--vf-line-strong);
+}
+[data-testid="stFileUploaderDropzone"] > div {
+  min-width: 0;
+}
+[data-testid="stFileUploaderDropzone"] p {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+[data-testid="stFileUploaderDropzone"] button {
+  min-height: 34px;
+  border-radius: 999px;
+}
+[data-testid="stFileChips"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+[data-testid="stFileChip"] {
+  max-width: 100% !important;
+  min-height: 42px;
+  border-radius: 12px !important;
+  background: var(--vf-surface-soft) !important;
+}
+[data-testid="stFileChipName"] {
+  max-width: none !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  color: transparent !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+}
+[data-testid="stFileChipName"]::after {
+  content: attr(title);
+  display: block;
+  color: var(--vf-shell-text);
+  font-size: .92rem;
+  font-weight: 650;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+[data-testid="stFileChipDeleteBtn"] button {
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  background: color-mix(in srgb, var(--vf-shell) 72%, transparent) !important;
+  border: 1px solid var(--vf-shell-line) !important;
+  color: var(--vf-shell-text) !important;
+}
+[data-testid="stFileChipDeleteBtn"] button:hover {
+  background: var(--vf-accent-soft) !important;
+}
+[data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChip"]) button[aria-label="Add files"] {
+  display: none !important;
+}
+[data-testid="stTextArea"] {
+  margin-top: -1rem !important;
 }
 [data-testid="stTextArea"] textarea {
   min-height: 146px !important;
   max-height: max(35svh, 12rem);
   padding: 1rem !important;
-  border-radius: 28px !important;
+  border-radius: 0 0 24px 24px !important;
   background-color: var(--vf-shell) !important;
   border-color: var(--vf-shell-line) !important;
   color: var(--vf-shell-text) !important;
@@ -1724,22 +1768,18 @@ def render_analysis(
             render_level_picker(user_level, level_note, centered=True)
 
         st.markdown('<div class="vf-section-label">INPUT</div>', unsafe_allow_html=True)
-        input_title_col, upload_col = st.columns([2.45, .55], gap="small")
-        with input_title_col:
-            st.markdown(
-                '<div class="vf-input-title"><span>上传文件或粘贴文章</span><small>txt / md / csv</small></div>',
-                unsafe_allow_html=True,
-            )
-        with upload_col:
-            st.markdown('<div class="vf-upload-slot"></div>', unsafe_allow_html=True)
-            uploaded = st.file_uploader(
-                "上传文件",
-                type=["txt", "md", "csv"],
-                accept_multiple_files=False,
-                key="analysis_upload",
-                help="支持 txt、md、csv；如果同时上传文件和粘贴文本，会优先分析上传文件。",
-                label_visibility="collapsed",
-            )
+        st.markdown(
+            '<div class="vf-input-title"><span>上传文件或粘贴文章</span><small>txt / md / csv</small></div>',
+            unsafe_allow_html=True,
+        )
+        uploaded = st.file_uploader(
+            "上传文件",
+            type=["txt", "md", "csv"],
+            accept_multiple_files=False,
+            key="analysis_upload",
+            help="支持 txt、md、csv；如果同时上传文件和粘贴文本，会优先分析上传文件。",
+            label_visibility="collapsed",
+        )
         pasted_text = st.text_area(
             "粘贴文章或词汇表",
             height=230,
