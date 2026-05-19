@@ -6,7 +6,6 @@ venv/
 output/*.csv
 output_words/*.csv
 data/user_profile.json
-data/ecdict.csv
 !output/.gitkeep
 !output_words/.gitkeep
 .DS_Store
