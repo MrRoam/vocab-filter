@@ -1,0 +1,2 @@
+[console_scripts]
+vocab-filter = vocab_filter.cli:main

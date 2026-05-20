@@ -1,0 +1,16 @@
+
+[full]
+streamlit>=1.31
+pandas>=1.5
+spacy>=3.7
+wordfreq>=3.1
+cefrpy>=1.0
+
+[nlp]
+spacy>=3.7
+wordfreq>=3.1
+cefrpy>=1.0
+
+[ui]
+streamlit>=1.31
+pandas>=1.5

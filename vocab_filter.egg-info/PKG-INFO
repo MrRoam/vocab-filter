@@ -1,3 +1,23 @@
+Metadata-Version: 2.4
+Name: vocab-filter
+Version: 0.2.0
+Summary: Rule-based personal English unknown-word filter using CEFR, frequency, and personal known/unknown word lists.
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Provides-Extra: ui
+Requires-Dist: streamlit>=1.31; extra == "ui"
+Requires-Dist: pandas>=1.5; extra == "ui"
+Provides-Extra: nlp
+Requires-Dist: spacy>=3.7; extra == "nlp"
+Requires-Dist: wordfreq>=3.1; extra == "nlp"
+Requires-Dist: cefrpy>=1.0; extra == "nlp"
+Provides-Extra: full
+Requires-Dist: streamlit>=1.31; extra == "full"
+Requires-Dist: pandas>=1.5; extra == "full"
+Requires-Dist: spacy>=3.7; extra == "full"
+Requires-Dist: wordfreq>=3.1; extra == "full"
+Requires-Dist: cefrpy>=1.0; extra == "full"
+
 # vocab-filter
 
 从英文文章里筛出更值得优先学习的单词。
