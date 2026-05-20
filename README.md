@@ -26,6 +26,7 @@ streamlit run app.py
 4. 查看待学习词、可复习词、低优先级词、未收录词和专有名词。
 5. 按需导出 Markdown 或 CSV。
 
+
 ---
 
 ## 轻量安装
