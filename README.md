@@ -14,9 +14,12 @@ Windows PowerShell：
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -e ".[ui]"
+pip install -e ".[full]"
+python -m spacy download en_core_web_sm
 streamlit run app.py
 ```
+
+中文释义词库随仓库提供在 `data/ecdict.csv`。新电脑先 `git clone` 或 `git pull` 到最新版，再按上面的命令安装依赖即可。
 
 打开浏览器后：
 
@@ -25,37 +28,3 @@ streamlit run app.py
 3. 点击“分析”。
 4. 查看待学习词、可复习词、低优先级词、未收录词和专有名词。
 5. 按需导出 Markdown 或 CSV。
-
-
----
-
-## 轻量安装
-
-默认 UI 安装是轻量版：
-
-```powershell
-pip install -e ".[ui]"
-```
-
-它只安装 UI 必需依赖，适合新电脑快速跑起来。
-
-如果你不想让程序尝试加载 spaCy，可以这样启动：
-
-```powershell
-$env:VOCAB_FILTER_NO_SPACY="1"
-streamlit run app.py
-```
-
----
-
-## 完整增强版
-
-如果你希望分词、词形还原、词频和 CEFR 覆盖更好，再安装完整增强依赖：
-
-```powershell
-pip install -e ".[full]"
-python -m spacy download en_core_web_sm
-streamlit run app.py
-```
-
-完整增强版下载会更多。日常使用可以先用轻量版。
