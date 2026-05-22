@@ -51,6 +51,40 @@ class LevelSettingsStateTest(unittest.TestCase):
 
         self.assertIsNone(at.file_uploader[0].value)
 
+    def test_analysis_renders_unified_composer(self):
+        at = AppTest.from_file("app.py", default_timeout=10).run()
+
+        markdown_values = [markdown.value for markdown in at.markdown]
+        self.assertTrue(any("vf-composer" in value for value in markdown_values))
+        self.assertTrue(any("今天要筛哪段英文？" in value for value in markdown_values))
+        self.assertFalse(any("vf-input-title" in value for value in markdown_values))
+
+    def test_composer_styles_remove_internal_seams(self):
+        at = AppTest.from_file("app.py", default_timeout=10).run()
+
+        styles = "\n".join(markdown.value for markdown in at.markdown)
+        self.assertIn("st-key-composer_shell", styles)
+        self.assertIn("vf-composer-shell-marker", styles)
+        self.assertIn("background: var(--vf-shell);", styles)
+        self.assertIn("overflow: hidden;", styles)
+        self.assertIn("background: transparent !important;", styles)
+        self.assertIn("border: 0 !important;", styles)
+        self.assertIn(".st-key-composer_shell [data-testid=\"stTextAreaRootElement\"]", styles)
+        self.assertIn(".st-key-composer_shell [data-testid=\"stTextArea\"] textarea:focus", styles)
+
+    def test_composer_styles_keep_unified_input_compact(self):
+        at = AppTest.from_file("app.py", default_timeout=10).run()
+
+        styles = "\n".join(markdown.value for markdown in at.markdown)
+        self.assertIn("padding: .58rem .72rem .68rem !important;", styles)
+        self.assertIn("min-height: 46px !important;", styles)
+        self.assertIn("height: 154px !important;", styles)
+        self.assertIn("min-height: 132px !important;", styles)
+        self.assertIn("padding: .5rem 0 0 !important;", styles)
+        self.assertIn("padding: .52rem .6rem .58rem !important;", styles)
+        self.assertIn("height: 90px !important;", styles)
+        self.assertIn("min-height: 64px !important;", styles)
+
 
 if __name__ == "__main__":
     unittest.main()

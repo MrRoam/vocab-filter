@@ -722,26 +722,51 @@ div[role="dialog"] .vf-level-pill strong {
   margin: 0 auto 1rem;
   text-align: center;
 }
-.vf-input-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .75rem;
+.vf-composer {
   width: min(768px, 100%);
-  min-height: 42px;
-  margin: 0 auto .2rem;
-  padding: .18rem .2rem .35rem;
-  color: var(--vf-shell-text);
+  margin: 0 auto .85rem;
+  text-align: center;
+  animation: vf-rise 420ms cubic-bezier(.165, .84, .44, 1) both;
+}
+.vf-composer h2 {
+  margin: 0;
+  color: var(--vf-text) !important;
+  opacity: 1 !important;
+  font-size: clamp(1.72rem, 4vw, 2.65rem);
+  font-weight: 560;
+  line-height: 1.06;
+}
+.vf-composer p {
+  margin: .72rem auto 0;
+  max-width: 36rem;
+  color: var(--vf-muted);
   font-size: .95rem;
-  font-weight: 680;
+  line-height: 1.55;
 }
-.vf-input-title small {
-  color: var(--vf-shell-muted);
+.vf-composer-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .5rem;
+  margin-top: .9rem;
+}
+.vf-composer-meta span {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--vf-line);
+  border-radius: 999px;
+  padding: .28rem .66rem;
+  background: var(--vf-surface-soft);
+  color: var(--vf-muted);
   font-size: .76rem;
-  font-weight: 520;
+  font-weight: 560;
 }
-.vf-action-align {
-  height: 1.75rem;
+.vf-composer-action-align {
+  height: 0;
+}
+.vf-composer-toolbar-anchor {
+  display: none;
 }
 .vf-workspace-kicker {
   display: inline-flex;
@@ -832,7 +857,7 @@ div[role="dialog"] .vf-level-pill strong {
   transform: translateY(-1px);
   box-shadow: var(--vf-shadow);
 }
-div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]):has(button[kind="primary"]) {
+div[data-testid="stHorizontalBlock"]:has(.vf-composer-action-align):not(:has([data-testid="stFileUploader"])) {
   width: min(768px, 100%) !important;
   margin-left: auto;
   margin-right: auto;
@@ -843,17 +868,42 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]):has(button
   margin-left: auto;
   margin-right: auto;
 }
+div[data-testid="stElementContainer"]:has([data-testid="stFileUploader"]) {
+  margin-bottom: 0 !important;
+}
+div[data-testid="stElementContainer"]:has([data-testid="stTextArea"]) {
+  margin-top: -1rem !important;
+  margin-bottom: 0 !important;
+  position: relative;
+}
+div[data-testid="stElementContainer"]:has([data-testid="stTextArea"])::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  width: min(768px, 100%);
+  height: 4px;
+  background: var(--vf-shell);
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 20;
+}
+div[data-testid="stElementContainer"]:has(.vf-composer-toolbar-anchor) {
+  height: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
 [data-testid="stFileUploader"] {
   margin-bottom: 0 !important;
 }
 [data-testid="stFileUploaderDropzone"] {
-  min-height: 58px !important;
-  padding: .5rem .72rem .5rem .95rem !important;
+  min-height: 62px !important;
+  padding: .58rem .72rem .58rem .82rem !important;
   border-style: solid !important;
   border-bottom: 0 !important;
-  border-radius: 24px 24px 0 0 !important;
-  background: color-mix(in srgb, var(--vf-shell) 82%, transparent) !important;
-  box-shadow: 0 0 0 1px var(--vf-shell-ring), var(--vf-shadow-soft);
+  border-radius: 30px 30px 0 0 !important;
+  background: var(--vf-shell) !important;
+  box-shadow: none !important;
 }
 [data-testid="stFileUploaderDropzone"]:hover {
   border-color: var(--vf-line-strong);
@@ -868,8 +918,23 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]):has(button
   text-overflow: ellipsis;
 }
 [data-testid="stFileUploaderDropzone"] button {
-  min-height: 34px;
-  border-radius: 999px;
+  width: 44px !important;
+  min-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  border-radius: 999px !important;
+  font-size: 0 !important;
+  padding: 0 !important;
+}
+[data-testid="stFileUploaderDropzone"] button * {
+  display: none !important;
+}
+[data-testid="stFileUploaderDropzone"] button::after {
+  content: "+";
+  color: var(--vf-accent-contrast);
+  font-size: 1.45rem;
+  font-weight: 360;
+  line-height: 1;
 }
 [data-testid="stFileChips"] {
   flex: 1 1 auto;
@@ -917,18 +982,20 @@ div[data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]):has(button
   display: none !important;
 }
 [data-testid="stTextArea"] {
-  margin-top: -1rem !important;
+  margin-top: -1.25rem !important;
 }
 [data-testid="stTextArea"] textarea {
-  min-height: 146px !important;
-  max-height: max(35svh, 12rem);
-  padding: 1rem !important;
-  border-radius: 0 0 24px 24px !important;
+  min-height: 138px !important;
+  max-height: max(38svh, 12rem);
+  padding: 1.05rem 1.1rem !important;
+  border-radius: 0 !important;
   background-color: var(--vf-shell) !important;
   border-color: var(--vf-shell-line) !important;
+  border-top-color: transparent !important;
+  border-bottom-color: transparent !important;
   color: var(--vf-shell-text) !important;
   -webkit-text-fill-color: var(--vf-shell-text) !important;
-  box-shadow: 0 0 0 1px var(--vf-shell-ring), var(--vf-shadow);
+  box-shadow: none !important;
 }
 [data-testid="stTextArea"] textarea::placeholder {
   color: var(--vf-shell-muted) !important;
@@ -940,6 +1007,107 @@ div[data-testid="stButton"]:has(button[kind="primary"]) {
 }
 div[data-testid="stButton"]:has(button[kind="primary"]) > button {
   border-radius: 999px;
+}
+div[data-testid="stHorizontalBlock"]:has(.vf-composer-action-align):not(:has([data-testid="stFileUploader"])) {
+  margin-top: -3.25rem;
+  padding: .72rem .78rem .78rem;
+  border: 1px solid var(--vf-shell-line);
+  border-top: 0;
+  border-radius: 0 0 30px 30px;
+  background: var(--vf-shell);
+  box-shadow: 0 0 0 1px var(--vf-shell-ring), var(--vf-shadow);
+  position: relative;
+}
+div[data-testid="stHorizontalBlock"]:has(.vf-composer-action-align):not(:has([data-testid="stFileUploader"]))::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: var(--vf-shell);
+  pointer-events: none;
+  z-index: 20;
+}
+div[data-testid="stHorizontalBlock"]:has(.vf-composer-action-align):not(:has([data-testid="stFileUploader"])) [data-testid="stSelectbox"] {
+  margin-bottom: 0;
+}
+div[data-testid="stHorizontalBlock"]:has(.vf-composer-action-align):not(:has([data-testid="stFileUploader"])) .stButton > button {
+  min-height: 44px;
+}
+.st-key-composer_shell,
+div[class*="st-key-composer_shell"] {
+  width: min(768px, 100%);
+  margin: 0 auto;
+  padding: .58rem .72rem .68rem !important;
+  border: 1px solid var(--vf-shell-line);
+  border-radius: 30px;
+  background: var(--vf-shell);
+  box-shadow: 0 0 0 1px var(--vf-shell-ring), var(--vf-shadow);
+  overflow: hidden;
+}
+.vf-composer-shell-marker {
+  display: none;
+}
+.st-key-composer_shell [data-testid="stFileUploader"],
+.st-key-composer_shell [data-testid="stTextArea"],
+div[class*="st-key-composer_shell"] [data-testid="stFileUploader"],
+div[class*="st-key-composer_shell"] [data-testid="stTextArea"] {
+  width: 100% !important;
+  margin: 0 !important;
+}
+.st-key-composer_shell div[data-testid="stElementContainer"]:has([data-testid="stFileUploader"]),
+.st-key-composer_shell div[data-testid="stElementContainer"]:has([data-testid="stTextArea"]),
+.st-key-composer_shell div[data-testid="stElementContainer"]:has(.vf-composer-toolbar-anchor),
+div[class*="st-key-composer_shell"] div[data-testid="stElementContainer"]:has([data-testid="stFileUploader"]),
+div[class*="st-key-composer_shell"] div[data-testid="stElementContainer"]:has([data-testid="stTextArea"]),
+div[class*="st-key-composer_shell"] div[data-testid="stElementContainer"]:has(.vf-composer-toolbar-anchor) {
+  margin: 0 !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+.st-key-composer_shell div[data-testid="stElementContainer"]:has([data-testid="stTextArea"])::before,
+.st-key-composer_shell div[data-testid="stHorizontalBlock"]:has(.vf-composer-action-align)::before,
+div[class*="st-key-composer_shell"] div[data-testid="stElementContainer"]:has([data-testid="stTextArea"])::before,
+div[class*="st-key-composer_shell"] div[data-testid="stHorizontalBlock"]:has(.vf-composer-action-align)::before {
+  content: none !important;
+}
+.st-key-composer_shell [data-testid="stFileUploaderDropzone"],
+div[class*="st-key-composer_shell"] [data-testid="stFileUploaderDropzone"] {
+  min-height: 46px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.st-key-composer_shell [data-testid="stTextArea"],
+div[class*="st-key-composer_shell"] [data-testid="stTextArea"] {
+  margin-top: .05rem !important;
+}
+.st-key-composer_shell [data-testid="stTextArea"] textarea,
+div[class*="st-key-composer_shell"] [data-testid="stTextArea"] textarea {
+  height: 154px !important;
+  min-height: 132px !important;
+  padding: .1rem .1rem .42rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.st-key-composer_shell div[data-testid="stHorizontalBlock"]:has(.vf-composer-action-align),
+div[class*="st-key-composer_shell"] div[data-testid="stHorizontalBlock"]:has(.vf-composer-action-align) {
+  width: 100% !important;
+  margin: 0 !important;
+  padding: .5rem 0 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.st-key-composer_shell div[data-testid="stHorizontalBlock"]:has(.vf-composer-action-align) .stButton > button,
+div[class*="st-key-composer_shell"] div[data-testid="stHorizontalBlock"]:has(.vf-composer-action-align) .stButton > button {
+  min-height: 44px;
 }
 div[role="dialog"] div[data-testid="stButton"]:has(button[kind="primary"]),
 div[data-testid="stDialog"] div[data-testid="stButton"]:has(button[kind="primary"]) {
@@ -1125,6 +1293,11 @@ div[data-baseweb="popover"] [aria-selected="true"] {
   outline: 0 !important;
   box-shadow: none !important;
 }
+[data-testid="stTextArea"] textarea {
+  border-top-color: transparent !important;
+  border-bottom-color: transparent !important;
+  box-shadow: none !important;
+}
 [data-testid="stTextAreaRootElement"],
 [data-testid="stTextAreaRootElement"] > div {
   border-color: transparent !important;
@@ -1135,6 +1308,21 @@ div[data-baseweb="popover"] [aria-selected="true"] {
 .vf-analysis-shell textarea:focus {
   border-color: var(--vf-warm) !important;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--vf-warm) 14%, transparent) !important;
+}
+.st-key-composer_shell [data-testid="stTextAreaRootElement"],
+.st-key-composer_shell [data-testid="stTextAreaRootElement"] > div,
+div[class*="st-key-composer_shell"] [data-testid="stTextAreaRootElement"],
+div[class*="st-key-composer_shell"] [data-testid="stTextAreaRootElement"] > div {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.st-key-composer_shell [data-testid="stTextArea"] textarea:focus,
+div[class*="st-key-composer_shell"] [data-testid="stTextArea"] textarea:focus {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 div[role="dialog"] {
   font-size: 1rem;
@@ -1232,7 +1420,7 @@ div[role="dialog"] div[data-testid="stRadio"] label:has(input[type="radio"]:chec
     padding-right: 1rem;
   }
   .vf-topbar {
-    margin-bottom: 2.2rem;
+    margin-bottom: 1.2rem;
   }
   .vf-workspace-heading {
     text-align: left;
@@ -1240,9 +1428,21 @@ div[role="dialog"] div[data-testid="stRadio"] label:has(input[type="radio"]:chec
   .vf-workspace-heading h2 {
     font-size: 2.2rem;
   }
+  .vf-composer h2 {
+    font-size: 1.85rem;
+  }
   .vf-analysis-shell {
     padding: .6rem;
     border-radius: 24px;
+  }
+  .st-key-composer_shell,
+  div[class*="st-key-composer_shell"] {
+    padding: .52rem .6rem .58rem !important;
+  }
+  .st-key-composer_shell [data-testid="stTextArea"] textarea,
+  div[class*="st-key-composer_shell"] [data-testid="stTextArea"] textarea {
+    height: 90px !important;
+    min-height: 64px !important;
   }
 }
 </style>
@@ -1767,48 +1967,54 @@ def render_analysis(
         if user_level is None:
             render_level_picker(user_level, level_note, centered=True)
 
-        st.markdown('<div class="vf-section-label">INPUT</div>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="vf-input-title"><span>上传文件或粘贴文章</span><small>txt / md / csv</small></div>',
+            """
+<div class="vf-composer">
+  <h2>今天要筛哪段英文？</h2>
+</div>
+            """,
             unsafe_allow_html=True,
         )
-        uploaded = st.file_uploader(
-            "上传文件",
-            type=["txt", "md", "csv"],
-            accept_multiple_files=False,
-            key="analysis_upload",
-            help="支持 txt、md、csv；如果同时上传文件和粘贴文本，会优先分析上传文件。",
-            label_visibility="collapsed",
-        )
-        pasted_text = st.text_area(
-            "粘贴文章或词汇表",
-            height=230,
-            placeholder="Paste an article, notes, or a word list...",
-            key="analysis_text",
-            label_visibility="collapsed",
-        )
-
-        default_analysis_level = user_level if user_level in CEFR_OPTIONS else "B1"
-        analysis_level_key = "analysis_cefr_level"
-        if st.session_state.get(analysis_level_key) not in CEFR_OPTIONS:
-            st.session_state.pop(analysis_level_key, None)
-        analyze_label = "重新分析" if st.session_state.get("last_result") else "分析"
-        level_col, analyze_col = st.columns([.55, 2.45], gap="small")
-        with level_col:
-            level_select_kwargs = {
-                "key": analysis_level_key,
-                "help": "只影响这次文章分析，可以临时切到 A1、B1 等水平查看筛词差异。",
-            }
-            if analysis_level_key not in st.session_state:
-                level_select_kwargs["index"] = CEFR_OPTIONS.index(default_analysis_level)
-            analysis_level = st.selectbox(
-                "分析水平",
-                CEFR_OPTIONS,
-                **level_select_kwargs,
+        with st.container(key="composer_shell"):
+            st.markdown('<div class="vf-composer-shell-marker"></div>', unsafe_allow_html=True)
+            uploaded = st.file_uploader(
+                "上传文件",
+                type=["txt", "md", "csv"],
+                accept_multiple_files=False,
+                key="analysis_upload",
+                help="支持 txt、md、csv；如果同时上传文件和粘贴文本，会优先分析上传文件。",
+                label_visibility="collapsed",
             )
-        with analyze_col:
-            st.markdown('<div class="vf-action-align"></div>', unsafe_allow_html=True)
-            analyze_btn = st.button(analyze_label, type="primary", use_container_width=True, key="analyze_button")
+            pasted_text = st.text_area(
+                "粘贴文章或词汇表",
+                height=170,
+                placeholder="粘贴文章、笔记或词表...",
+                key="analysis_text",
+                label_visibility="collapsed",
+            )
+
+            default_analysis_level = user_level if user_level in CEFR_OPTIONS else "B1"
+            analysis_level_key = "analysis_cefr_level"
+            if st.session_state.get(analysis_level_key) not in CEFR_OPTIONS:
+                st.session_state.pop(analysis_level_key, None)
+            analyze_label = "重新分析" if st.session_state.get("last_result") else "分析"
+            st.markdown('<div class="vf-composer-toolbar-anchor"></div>', unsafe_allow_html=True)
+            level_col, analyze_col = st.columns([.55, 2.45], gap="small")
+            with level_col:
+                level_select_kwargs = {
+                    "key": analysis_level_key,
+                    "help": "只影响这次文章分析，可以临时切到 A1、B1 等水平查看筛词差异。",
+                }
+                if analysis_level_key not in st.session_state:
+                    level_select_kwargs["index"] = CEFR_OPTIONS.index(default_analysis_level)
+                analysis_level = st.selectbox(
+                    "分析水平",
+                    CEFR_OPTIONS,
+                    **level_select_kwargs,
+                )
+            with analyze_col:
+                st.markdown('<div class="vf-composer-action-align"></div>', unsafe_allow_html=True)
+                analyze_btn = st.button(analyze_label, type="primary", use_container_width=True, key="analyze_button")
 
     if analyze_btn:
         if uploaded is None and not pasted_text.strip():
